@@ -88,10 +88,18 @@ export default function HistoryScreen() {
     }
   };
 
-  const selectDate = (event: any, date?: Date) => {
+  const selectDate = async (event: any, date?: Date) => {
     setShowDatePicker(Platform.OS === 'ios');
     if (date) {
       setSelectedDate(date);
+      // Load entries for the newly selected date
+      try {
+        const dateString = date.toISOString().split('T')[0];
+        const entries = await drinkService.getDrinksForDate(dateString);
+        setSelectedDateEntries(entries);
+      } catch (error: any) {
+        Alert.alert('Error', error.message);
+      }
     }
   };
 
@@ -292,7 +300,12 @@ export default function HistoryScreen() {
                 onPress={() => setShowDatePicker(true)}
               >
                 <Text style={styles.dateButtonText}>
-                  {selectedDate.toLocaleDateString()}
+                  {selectedDate.toLocaleDateString('en-US', { 
+                    weekday: 'short', 
+                    month: 'short', 
+                    day: 'numeric',
+                    year: 'numeric'
+                  })}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -301,92 +314,99 @@ export default function HistoryScreen() {
               <DateTimePicker
                 value={selectedDate}
                 mode="date"
-                display={Platform.OS === 'ios' ? 'spinner' : 'default'}
+                display="compact"
                 onChange={selectDate}
                 maximumDate={new Date()}
               />
             )}
 
-            {/* Existing Entries */}
-            <View style={styles.entriesSection}>
-              <Text style={styles.sectionLabel}>Entries for {selectedDate.toLocaleDateString()}</Text>
-              {selectedDateEntries.length === 0 ? (
-                <Text style={styles.noEntriesText}>No entries for this date</Text>
-              ) : (
-                selectedDateEntries.map((entry) => (
-                  <View key={entry.id} style={styles.entryItem}>
-                    <View style={styles.entryInfo}>
-                      <Text style={styles.entryCount}>{entry.drink_count} drink(s)</Text>
-                      <Text style={styles.entryTime}>
-                        {new Date(entry.logged_at).toLocaleTimeString()}
-                      </Text>
-                    </View>
-                    <View style={styles.entryActions}>
-                      <TouchableOpacity 
-                        style={styles.editButton}
-                        onPress={() => startEditEntry(entry)}
-                      >
-                        <Text style={styles.editButtonText}>Edit</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity 
-                        style={styles.deleteButton}
-                        onPress={() => deleteEntry(entry)}
-                      >
-                        <Text style={styles.deleteButtonText}>Delete</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ))
-              )}
-            </View>
-
-            {/* Add New Entry */}
-            <View style={styles.addEntrySection}>
-              <Text style={styles.sectionLabel}>Add New Entry</Text>
-              <View style={styles.addEntryForm}>
-                <View style={styles.formRow}>
-                  <View style={styles.countInput}>
-                    <Text style={styles.inputLabel}>Drinks</Text>
-                    <TextInput
-                      style={styles.numberInput}
-                      value={newEntryCount}
-                      onChangeText={setNewEntryCount}
-                      keyboardType="number-pad"
-                      placeholder="0"
-                    />
-                  </View>
-                  <View style={styles.timeInput}>
-                    <Text style={styles.inputLabel}>Time</Text>
-                    <TouchableOpacity 
-                      style={styles.timeButton}
-                      onPress={() => setShowTimePicker(true)}
-                    >
-                      <Text style={styles.timeButtonText}>
-                        {newEntryTime.toLocaleTimeString()}
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-                
-                {showTimePicker && (
-                  <DateTimePicker
-                    value={newEntryTime}
-                    mode="time"
-                    display={Platform.OS === 'ios' ? 'spinner' : 'default'}
-                    onChange={(event, time) => {
-                      setShowTimePicker(Platform.OS === 'ios');
-                      if (time) setNewEntryTime(time);
-                    }}
-                  />
+            {/* Scrollable Content */}
+            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
+              {/* Existing Entries */}
+              <View style={styles.entriesSection}>
+                <Text style={styles.sectionLabel}>
+                  Entries for {selectedDate.toLocaleDateString()}
+                </Text>
+                {selectedDateEntries.length === 0 ? (
+                  <Text style={styles.noEntriesText}>No entries for this date</Text>
+                ) : (
+                  <ScrollView style={styles.entriesList} nestedScrollEnabled={true}>
+                    {selectedDateEntries.map((entry) => (
+                      <View key={entry.id} style={styles.entryItem}>
+                        <View style={styles.entryInfo}>
+                          <Text style={styles.entryCount}>{entry.drink_count} drink(s)</Text>
+                          <Text style={styles.entryTime}>
+                            {new Date(entry.logged_at).toLocaleTimeString()}
+                          </Text>
+                        </View>
+                        <View style={styles.entryActions}>
+                          <TouchableOpacity 
+                            style={styles.editButton}
+                            onPress={() => startEditEntry(entry)}
+                          >
+                            <Text style={styles.editButtonText}>Edit</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity 
+                            style={styles.deleteButton}
+                            onPress={() => deleteEntry(entry)}
+                          >
+                            <Text style={styles.deleteButtonText}>Delete</Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    ))}
+                  </ScrollView>
                 )}
-
-                <TouchableOpacity style={styles.addButton} onPress={addNewEntry}>
-                  <Text style={styles.addButtonText}>Add Entry</Text>
-                </TouchableOpacity>
               </View>
-            </View>
 
-            {/* Modal Actions */}
+              {/* Add New Entry */}
+              <View style={styles.addEntrySection}>
+                <Text style={styles.sectionLabel}>Add New Entry</Text>
+                <View style={styles.addEntryForm}>
+                  <View style={styles.formRow}>
+                    <View style={styles.countInput}>
+                      <Text style={styles.inputLabel}>Drinks</Text>
+                      <TextInput
+                        style={styles.numberInput}
+                        value={newEntryCount}
+                        onChangeText={setNewEntryCount}
+                        keyboardType="number-pad"
+                        placeholder="0"
+                      />
+                    </View>
+                    <View style={styles.timeInput}>
+                      <Text style={styles.inputLabel}>Time</Text>
+                      <TouchableOpacity 
+                        style={styles.timeButton}
+                        onPress={() => setShowTimePicker(true)}
+                      >
+                        <Text style={styles.timeButtonText}>
+                          {newEntryTime.toLocaleTimeString()}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  
+                  {showTimePicker && (
+                    <DateTimePicker
+                      value={newEntryTime}
+                      mode="time"
+                      display={Platform.OS === 'ios' ? 'compact' : 'default'}
+                      onChange={(event, time) => {
+                        setShowTimePicker(Platform.OS === 'ios');
+                        if (time) setNewEntryTime(time);
+                      }}
+                    />
+                  )}
+
+                  <TouchableOpacity style={styles.addButton} onPress={addNewEntry}>
+                    <Text style={styles.addButtonText}>Add Entry</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+
+            {/* Modal Actions - Fixed at bottom */}
             <View style={styles.modalActions}>
               <TouchableOpacity style={styles.closeButton} onPress={closeEditModal}>
                 <Text style={styles.closeButtonText}>Done</Text>
@@ -553,7 +573,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 20,
     width: '90%',
-    maxHeight: '80%',
+    maxHeight: '85%',
+    flexDirection: 'column',
   },
   modalTitle: {
     fontSize: 18,
@@ -563,7 +584,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   dateSection: {
-    marginBottom: 20,
+    marginBottom: 15,
+  },
+  modalScrollView: {
+    flex: 1,
+    marginBottom: 15,
   },
   fieldLabel: {
     fontSize: 14,
@@ -583,7 +608,10 @@ const styles = StyleSheet.create({
     color: '#2c3e50',
   },
   entriesSection: {
-    marginBottom: 20,
+    marginBottom: 15,
+  },
+  entriesList: {
+    maxHeight: 120,
   },
   sectionLabel: {
     fontSize: 16,
@@ -595,7 +623,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: '#7f8c8d',
     textAlign: 'center',
-    padding: 20,
+    padding: 15,
     fontStyle: 'italic',
   },
   entryItem: {
@@ -647,10 +675,10 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   addEntrySection: {
-    marginBottom: 20,
+    marginBottom: 10,
   },
   addEntryForm: {
-    gap: 15,
+    gap: 10,
   },
   formRow: {
     flexDirection: 'row',
@@ -700,7 +728,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   modalActions: {
-    marginTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 15,
   },
   closeButton: {
     backgroundColor: '#95a5a6',
