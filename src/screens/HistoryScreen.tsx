@@ -1,15 +1,18 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Platform } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import DrinkChart from '../components/DrinkChart';
 import { analyticsService, ChartData, TimeRange } from '../services/analyticsService';
 import { drinkService } from '../services/drinkService';
 import { DrinkEntry } from '../types';
+import ConfirmationPopup from '../components/ConfirmationPopup';
 
 export default function HistoryScreen() {
  const [timeRange, setTimeRange] = useState<TimeRange>('week');
  const [chartData, setChartData] = useState<ChartData | null>(null);
  const [loading, setLoading] = useState(true);
+ const isFocused = useIsFocused();
 
  // Historical editing state
  const [showEditModal, setShowEditModal] = useState(false);
@@ -22,10 +25,14 @@ export default function HistoryScreen() {
  const [showTimePicker, setShowTimePicker] = useState(false);
  const [newEntryCount, setNewEntryCount] = useState('');
  const [newEntryTime, setNewEntryTime] = useState(new Date());
+ const [isPopupVisible, setPopupVisible] = useState(false);
+ const [selectedEntry, setSelectedEntry] = useState<DrinkEntry | null>(null);
 
  useEffect(() => {
-  loadData();
- }, [timeRange]);
+  if (isFocused) {
+   loadData();
+  }
+ }, [timeRange, isFocused]);
 
  const loadData = async () => {
   try {
@@ -160,26 +167,23 @@ export default function HistoryScreen() {
  };
 
  const deleteEntry = (entry: DrinkEntry) => {
-  Alert.alert(
-   'Delete Entry',
-   `Delete ${entry.drink_count} drink(s) logged at ${new Date(entry.logged_at).toLocaleTimeString()}?`,
-   [
-    { text: 'Cancel', style: 'cancel' },
-    {
-     text: 'Delete',
-     style: 'destructive',
-     onPress: async () => {
-      try {
-       await drinkService.deleteDrinkEntry(entry.id);
-       await loadSelectedDateEntries();
-       await loadData(); // Refresh charts
-      } catch (error: any) {
-       Alert.alert('Error', error.message);
-      }
-     }
-    }
-   ]
-  );
+  setSelectedEntry(entry);
+  setPopupVisible(true);
+ };
+
+ const handleConfirmDelete = async () => {
+  if (!selectedEntry) return;
+
+  try {
+   await drinkService.deleteDrinkEntry(selectedEntry.id);
+   await loadSelectedDateEntries();
+   await loadData(); // Refresh charts
+  } catch (error: any) {
+   Alert.alert('Error', error.message);
+  } finally {
+   setPopupVisible(false);
+   setSelectedEntry(null);
+  }
  };
 
  const addNewEntry = async () => {
@@ -576,6 +580,14 @@ export default function HistoryScreen() {
      </View>
     </Modal>
    )}
+
+   <ConfirmationPopup
+    visible={isPopupVisible}
+    onConfirm={handleConfirmDelete}
+    onCancel={() => setPopupVisible(false)}
+    title="Delete Entry"
+    message={`Are you sure you want to delete ${selectedEntry?.drink_count} drink(s)?`}
+   />
   </ScrollView>
  );
 }

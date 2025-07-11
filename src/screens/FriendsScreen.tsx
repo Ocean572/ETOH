@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { friendsService, FriendRequest, Friend } from '../services/friendsService';
 import { supabase } from '../services/supabase';
+import ConfirmationPopup from '../components/ConfirmationPopup';
 
 export default function FriendsScreen() {
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -21,6 +22,8 @@ export default function FriendsScreen() {
   const [newFriendEmail, setNewFriendEmail] = useState('');
   const [sendingRequest, setSendingRequest] = useState(false);
   const [currentUser, setCurrentUser] = useState<any>(null);
+  const [isPopupVisible, setPopupVisible] = useState(false);
+  const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -118,26 +121,23 @@ export default function FriendsScreen() {
   };
 
   const removeFriend = (friend: Friend) => {
-    Alert.alert(
-      'Remove Friend',
-      `Are you sure you want to remove ${friend.friend_profile.full_name || friend.friend_profile.email} from your friends?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await friendsService.removeFriend(friend.id);
-              Alert.alert('Success', 'Friend removed');
-              await loadData();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            }
-          }
-        }
-      ]
-    );
+    setSelectedFriend(friend);
+    setPopupVisible(true);
+  };
+
+  const handleConfirmRemove = async () => {
+    if (!selectedFriend) return;
+
+    try {
+      await friendsService.removeFriend(selectedFriend.id);
+      Alert.alert('Success', 'Friend removed');
+      await loadData();
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setPopupVisible(false);
+      setSelectedFriend(null);
+    }
   };
 
   const renderFriendRequest = (request: FriendRequest) => {
@@ -293,6 +293,14 @@ export default function FriendsScreen() {
           friends.map(renderFriend)
         )}
       </View>
+
+      <ConfirmationPopup
+        visible={isPopupVisible}
+        onConfirm={handleConfirmRemove}
+        onCancel={() => setPopupVisible(false)}
+        title="Remove Friend"
+        message={`Are you sure you want to remove ${selectedFriend?.friend_profile.full_name || selectedFriend?.friend_profile.email}?`}
+      />
     </ScrollView>
   );
 }

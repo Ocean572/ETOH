@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, Tex
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { drinkService } from '../services/drinkService';
 import { DrinkEntry } from '../types';
+import ConfirmationPopup from '../components/ConfirmationPopup';
 
 export default function HomeScreen() {
   const [todaysDrinks, setTodaysDrinks] = useState<DrinkEntry[]>([]);
@@ -12,6 +13,8 @@ export default function HomeScreen() {
   const [editTime, setEditTime] = useState(new Date());
   const [editCount, setEditCount] = useState('');
   const [showTimePicker, setShowTimePicker] = useState(false);
+  const [isPopupVisible, setPopupVisible] = useState(false);
+  const [selectedEntry, setSelectedEntry] = useState<DrinkEntry | null>(null);
 
   useEffect(() => {
     loadData();
@@ -42,25 +45,22 @@ export default function HomeScreen() {
   };
 
   const deleteEntry = (entry: DrinkEntry) => {
-    Alert.alert(
-      'Delete Entry',
-      `Delete ${entry.drink_count} drink(s) logged at ${new Date(entry.logged_at).toLocaleTimeString()}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await drinkService.deleteDrinkEntry(entry.id);
-              loadData();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            }
-          }
-        }
-      ]
-    );
+    setSelectedEntry(entry);
+    setPopupVisible(true);
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!selectedEntry) return;
+
+    try {
+      await drinkService.deleteDrinkEntry(selectedEntry.id);
+      loadData();
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setPopupVisible(false);
+      setSelectedEntry(null);
+    }
   };
 
   const startEdit = (entry: DrinkEntry) => {
@@ -249,6 +249,14 @@ export default function HomeScreen() {
           </View>
         </View>
       </Modal>
+
+      <ConfirmationPopup
+        visible={isPopupVisible}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setPopupVisible(false)}
+        title="Delete Entry"
+        message={`Are you sure you want to delete ${selectedEntry?.drink_count} drink(s)?`}
+      />
     </ScrollView>
   );
 }
