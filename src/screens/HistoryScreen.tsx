@@ -90,6 +90,12 @@ export default function HistoryScreen() {
   setEditCount('');
   setNewEntryCount('');
   setSelectedDateEntries([]);
+  setShowDatePicker(false);
+  setShowTimePicker(false);
+  setPopupVisible(false);
+  setSelectedEntry(null);
+  setEditTime(new Date());
+  setNewEntryTime(new Date());
  };
 
  const loadSelectedDateEntries = async () => {
@@ -159,6 +165,7 @@ export default function HistoryScreen() {
     logged_at: editTime.toISOString(),
    });
    setEditingEntry(null);
+   setShowTimePicker(false);
    await loadSelectedDateEntries();
    await loadData(); // Refresh charts
   } catch (error: any) {
@@ -183,6 +190,7 @@ export default function HistoryScreen() {
   } finally {
    setPopupVisible(false);
    setSelectedEntry(null);
+   setShowTimePicker(false); // Add this line
   }
  };
 
