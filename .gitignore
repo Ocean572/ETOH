@@ -1,37 +1,132 @@
-# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
-
-# dependencies
+# Expo / React Native
 node_modules/
-
-# Expo
 .expo/
 dist/
-web-build/
-expo-env.d.ts
-
-# Native
-.kotlin/
-*.orig.*
+npm-debug.*
 *.jks
 *.p8
 *.p12
 *.key
 *.mobileprovision
-
-# Metro
+*.orig.*
+web-build/
+.expo-shared/
 .metro-health-check*
 
-# debug
-npm-debug.*
-yarn-debug.*
-yarn-error.*
+# Environment variables - CRITICAL
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env.dev
+
+# Supabase local instance files (keep migrations/ folder)
+supabase/.branches
+supabase/.temp
+supabase/logs
+supabase/config.toml
+supabase/volumes/
+supabase/.branches/
+supabase/.temp/
+
+# Database files - actual database data
+*.db
+*.sqlite
+*.sqlite3
+*.dump
+*.sql.gz
 
 # macOS
 .DS_Store
-*.pem
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
 
-# local env files
-.env*.local
+# Windows
+ehthumbs.db
+Thumbs.db
 
-# typescript
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory
+coverage/
+*.lcov
+.nyc_output
+
+# Dependency directories
+node_modules/
+jspm_packages/
+
+# TypeScript cache
 *.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Yarn Integrity file
+.yarn-integrity
+
+# API keys and secrets - CRITICAL
+secrets.json
+service-account.json
+google-services.json
+GoogleService-Info.plist
+*.pem
+*.key
+*.crt
+*.p12
+*.mobileprovision
+
+# Generated files
+generated/
+build/
+dist/
+out/
+tmp/
+temp/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Firebase
+.firebase/
+
+# Sentry
+.sentryclirc
+
+# Capacitor
+ios/
+android/
+capacitor.config.json
