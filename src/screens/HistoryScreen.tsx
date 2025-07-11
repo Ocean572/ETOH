@@ -1,12 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Platform } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Platform, Button } from 'react-native';
 import { useIsFocused } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import DrinkChart from '../components/DrinkChart';
 import { analyticsService, ChartData, TimeRange } from '../services/analyticsService';
 import { drinkService } from '../services/drinkService';
 import { DrinkEntry } from '../types';
-import ConfirmationPopup from '../components/ConfirmationPopup';
 
 export default function HistoryScreen() {
  const [timeRange, setTimeRange] = useState<TimeRange>('week');
@@ -25,7 +24,9 @@ export default function HistoryScreen() {
  const [showTimePicker, setShowTimePicker] = useState(false);
  const [newEntryCount, setNewEntryCount] = useState('');
  const [newEntryTime, setNewEntryTime] = useState(new Date());
- const [isPopupVisible, setPopupVisible] = useState(false);
+
+ // State to manage which view is visible inside the historical edit modal
+ const [modalView, setModalView] = useState('list'); // 'list', 'edit', or 'delete'
  const [selectedEntry, setSelectedEntry] = useState<DrinkEntry | null>(null);
 
  useEffect(() => {
@@ -73,6 +74,7 @@ export default function HistoryScreen() {
  };
 
  const openEditModal = async () => {
+  setModalView('list'); // Always open to the list view
   setShowEditModal(true);
   // Always load entries for the current selected date when opening modal
   try {
@@ -92,10 +94,10 @@ export default function HistoryScreen() {
   setSelectedDateEntries([]);
   setShowDatePicker(false);
   setShowTimePicker(false);
-  setPopupVisible(false);
   setSelectedEntry(null);
   setEditTime(new Date());
   setNewEntryTime(new Date());
+  setModalView('list'); // Reset the view
  };
 
  const loadSelectedDateEntries = async () => {
@@ -148,6 +150,7 @@ export default function HistoryScreen() {
   setEditingEntry(entry);
   setEditTime(new Date(entry.logged_at));
   setEditCount(entry.drink_count.toString());
+  setModalView('edit'); // Switch to the edit view
  };
 
  const saveEditEntry = async () => {
@@ -168,6 +171,7 @@ export default function HistoryScreen() {
    setShowTimePicker(false);
    await loadSelectedDateEntries();
    await loadData(); // Refresh charts
+   setModalView('list'); // Return to the list view
   } catch (error: any) {
    Alert.alert('Error', error.message);
   }
@@ -175,7 +179,7 @@ export default function HistoryScreen() {
 
  const deleteEntry = (entry: DrinkEntry) => {
   setSelectedEntry(entry);
-  setPopupVisible(true);
+  setModalView('delete'); // Switch to the delete confirmation view
  };
 
  const handleConfirmDelete = async () => {
@@ -188,9 +192,8 @@ export default function HistoryScreen() {
   } catch (error: any) {
    Alert.alert('Error', error.message);
   } finally {
-   setPopupVisible(false);
    setSelectedEntry(null);
-   setShowTimePicker(false); // Add this line
+   setModalView('list'); // Return to the list view
   }
  };
 
@@ -214,112 +217,392 @@ export default function HistoryScreen() {
   }
  };
 
- return (
-  <ScrollView style={styles.container}>
-   <View style={styles.header}>
-    <Text style={styles.title}>{getTimeRangeTitle(timeRange)}</Text>
-    <Text style={styles.subtitle}>{getTimeRangeDescription(timeRange)}</Text>
-   </View>
-
-   <View style={styles.timeRangeSelector}>
-    <TouchableOpacity
-     style={[
-      styles.timeRangeButton,
-      timeRange === 'week' && styles.activeTimeRangeButton,
-     ]}
-     onPress={() => setTimeRange('week')}
-    >
-     <Text
-      style={[
-       styles.timeRangeButtonText,
-       timeRange === 'week' && styles.activeTimeRangeButtonText,
-      ]}
-     >
-      Week
-     </Text>
-    </TouchableOpacity>
-
-    <TouchableOpacity
-     style={[
-      styles.timeRangeButton,
-      timeRange === 'month' && styles.activeTimeRangeButton,
-     ]}
-     onPress={() => setTimeRange('month')}
-    >
-     <Text
-      style={[
-       styles.timeRangeButtonText,
-       timeRange === 'month' && styles.activeTimeRangeButtonText,
-      ]}
-     >
-      Month
-     </Text>
-    </TouchableOpacity>
-
-    <TouchableOpacity
-     style={[
-      styles.timeRangeButton,
-      timeRange === 'year' && styles.activeTimeRangeButton,
-     ]}
-     onPress={() => setTimeRange('year')}
-    >
-     <Text
-      style={[
-       styles.timeRangeButtonText,
-       timeRange === 'year' && styles.activeTimeRangeButtonText,
-      ]}
-     >
-      Year
-     </Text>
-    </TouchableOpacity>
-   </View>
-
-   <DrinkChart
-    data={chartData || { labels: [], data: [] }}
-    timeRange={timeRange}
-    loading={loading}
-   />
-
-   {chartData && !loading && (
-    <View style={styles.statsContainer}>
-     <View style={styles.statCard}>
-      <Text style={styles.statNumber}>
-       {chartData.data.reduce((sum, val) => sum + val, 0)}
-      </Text>
-      <Text style={styles.statLabel}>
-       Total {timeRange === 'week' ? 'Drinks' : timeRange === 'month' ? 'Drinks' : 'Drinks'}
-      </Text>
+ const renderModalContent = () => {
+  if (modalView === 'edit' && editingEntry) {
+   return (
+    <View style={styles.editModalContent}>
+     <Text style={styles.modalTitle}>Edit Entry</Text>
+    
+     <View style={styles.editField}>
+      <Text style={styles.fieldLabel}>Number of Drinks</Text>
+      <TextInput
+       style={styles.editInput}
+       value={editCount}
+       onChangeText={setEditCount}
+       keyboardType="number-pad"
+       placeholder="Enter number of drinks"
+      />
      </View>
 
-     <View style={styles.statCard}>
-      <Text style={styles.statNumber}>
-       {chartData.data.length > 0
-        ? Math.round((chartData.data.reduce((sum, val) => sum + val, 0) / chartData.data.length) * 10) / 10
-        : 0
-       }
-      </Text>
-      <Text style={styles.statLabel}>
-       Average per {timeRange === 'week' ? 'Day' : timeRange === 'month' ? 'Week' : 'Month'}
-      </Text>
+     <View style={styles.editField}>
+      <Text style={styles.fieldLabel}>Time</Text>
+      {Platform.OS === 'web' ? (
+       <View style={styles.webDateInputContainer}>
+        <input
+         type="time"
+         value={editTime.toTimeString().slice(0, 5)}
+         onChange={(e) => {
+          const [hours, minutes] = e.target.value.split(':');
+          const newTime = new Date(editTime);
+          newTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+          setEditTime(newTime);
+         }}
+         style={{
+          width: '100%',
+          maxWidth: '100%',
+          boxSizing: 'border-box',
+          padding: '12px',
+          fontSize: '16px',
+           border: '1px solid #ddd',
+           borderRadius: '6px',
+           backgroundColor: '#f9f9f9',
+           color: '#2c3e50',
+         }}
+        />
+       </View>
+      ) : (
+       <TouchableOpacity
+        style={styles.timeButton}
+        onPress={() => setShowTimePicker(true)}
+       >
+        <Text style={styles.timeButtonText}>
+         {editTime.toLocaleTimeString()}
+        </Text>
+       </TouchableOpacity>
+      )}
      </View>
 
-     <View style={styles.statCard}>
-      <Text style={styles.statNumber}>
-       {Math.max(...(chartData.data.length > 0 ? chartData.data : [0]))}
-      </Text>
-      <Text style={styles.statLabel}>
-       Peak {timeRange === 'week' ? 'Day' : timeRange === 'month' ? 'Week' : 'Month'}
-      </Text>
+     <View style={styles.modalButtons}>
+      <TouchableOpacity
+       style={styles.cancelButton}
+       onPress={() => setModalView('list')}
+      >
+       <Text style={styles.cancelButtonText}>Cancel</Text>
+       </TouchableOpacity>
+       <TouchableOpacity
+           style={styles.saveButton}
+           onPress={saveEditEntry}
+       >
+           <Text style={styles.saveButtonText}>Save</Text>
+       </TouchableOpacity>
      </View>
     </View>
-   )}
+   );
+  }
 
-   {/* Edit History Button */}
-   <View style={styles.editHistorySection}>
-    <TouchableOpacity style={styles.editHistoryButton} onPress={openEditModal}>
-     <Text style={styles.editHistoryButtonText}>📅 Edit History</Text>
-    </TouchableOpacity>
-   </View>
+  if (modalView === 'delete' && selectedEntry) {
+   return (
+    <View style={styles.editModalContent}>
+     <Text style={styles.modalTitle}>Delete Entry</Text>
+     <Text style={styles.message}>Are you sure you want to delete {selectedEntry?.drink_count} drink(s)?</Text>
+     <View style={styles.modalButtons}>
+       <TouchableOpacity
+        style={styles.cancelButton}
+        onPress={() => setModalView('list')}
+       >
+        <Text style={styles.cancelButtonText}>Cancel</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+            style={styles.deleteConfirmButton}
+            onPress={handleConfirmDelete}
+        >
+            <Text style={styles.saveButtonText}>Delete</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+   );
+  }
+
+  // Default to the list view
+  return (
+   <ScrollView style={styles.modalScrollContainer} contentContainerStyle={styles.modalContent}>
+    <Text style={styles.modalTitle}>Edit Historical Data</Text>
+   
+    {/* Date Selector */}
+    <View style={styles.dateSection}>
+     <Text style={styles.fieldLabel}>Select Date</Text>
+        {Platform.OS === 'web' ? (
+            <View style={styles.webDateInputContainer}>
+                <input
+                    type="date"
+                    value={selectedDate.toISOString().split('T')[0]}
+                    onChange={selectDate}
+                    max={new Date().toISOString().split('T')[0]}
+                    style={{
+                        width: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        padding: '12px',
+                        fontSize: '16px',
+                        border: '1px solid #ddd',
+                        borderRadius: '6px',
+                        backgroundColor: '#f9f9f9',
+                        color: '#2c3e50',
+                    }}
+                />
+            </View>
+        ) : (
+            <>
+                {/* For Android, show the button. For iOS, don't. */}
+                {Platform.OS !== 'ios' && (
+                    <TouchableOpacity
+                        style={styles.dateButton}
+                        onPress={() => setShowDatePicker(true)}
+                    >
+                        <Text style={styles.dateButtonText}>
+                            {selectedDate.toLocaleDateString('en-US', {
+                                weekday: 'short',
+                                month: 'short',
+                                day: 'numeric',
+                                year: 'numeric'
+                            })}
+                        </Text>
+                    </TouchableOpacity>
+                )}
+                {/* For iOS, show picker always. For Android, show on click */}
+                {(showDatePicker || Platform.OS === 'ios') && (
+                    <View style={styles.iosDatePickerContainer}>
+                        <DateTimePicker
+                            value={selectedDate}
+                            mode="date"
+                            display="compact"
+                            onChange={selectDate}
+                            maximumDate={new Date()}
+                            style={styles.iosDatePicker}
+                        />
+                    </View>
+                )}
+            </>
+        )}
+    </View>
+
+    {/* Existing Entries */}
+    <View style={styles.entriesSection}>
+     <Text style={styles.sectionLabel}>
+      Entries for {selectedDate.toLocaleDateString()}
+     </Text>
+     {selectedDateEntries.length === 0 ? (
+      <Text style={styles.noEntriesText}>No entries for this date</Text>
+     ) : (
+      <ScrollView style={styles.entriesList}>
+       {selectedDateEntries.map((entry) => (
+        <View key={entry.id} style={styles.entryItem}>
+         <View style={styles.entryInfo}>
+          <Text style={styles.entryCount}>{entry.drink_count} drink(s)</Text>
+          <Text style={styles.entryTime}>
+           {new Date(entry.logged_at).toLocaleTimeString()}
+          </Text>
+         </View>
+         <View style={styles.entryActions}>
+          <TouchableOpacity
+           style={styles.editButton}
+           onPress={() => startEditEntry(entry)}
+          >
+           <Text style={styles.editButtonText}>Edit</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+           style={styles.deleteButton}
+           onPress={() => deleteEntry(entry)}
+          >
+           <Text style={styles.deleteButtonText}>Delete</Text>
+           </TouchableOpacity>
+         </View>
+        </View>
+       ))}
+      </ScrollView>
+     )}
+    </View>
+
+    {/* Add New Entry Section */}
+    <View style={styles.addEntrySection}>
+     <Text style={styles.sectionLabel}>Add New Entry</Text>
+     <View style={styles.addEntryForm}>
+      <View style={styles.formRow}>
+       <View style={styles.countInput}>
+        <Text style={styles.inputLabel}>Drinks</Text>
+        <TextInput
+         style={styles.numberInput}
+         value={newEntryCount}
+         onChangeText={setNewEntryCount}
+         keyboardType="number-pad"
+         placeholder="0"
+        />
+       </View>
+       <View style={styles.timeInput}>
+        <Text style={styles.inputLabel}>Time</Text>
+        {Platform.OS === 'web' ? (
+         <View style={styles.webDateInputContainer}>
+           <input
+               type="time"
+               value={newEntryTime.toTimeString().slice(0, 5)}
+               onChange={(e) => {
+                   const [hours, minutes] = e.target.value.split(':');
+                   const newTime = new Date();
+                   newTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                   setNewEntryTime(newTime);
+               }}
+               style={{
+                   width: '100%',
+                   maxWidth: '100%',
+                   boxSizing: 'border-box',
+                   padding: '12px',
+                   fontSize: '16px',
+                   border: '1px solid #ddd',
+                   borderRadius: '6px',
+                   backgroundColor: '#f9f9f9',
+                   color: '#2c3e50',
+               }}
+           />
+         </View>
+        ) : (
+         <TouchableOpacity
+          style={styles.timeButton}
+          onPress={() => setShowTimePicker(true)}
+         >
+           <Text style={styles.timeButtonText}>
+               {newEntryTime.toLocaleTimeString()}
+           </Text>
+         </TouchableOpacity>
+        )}
+       </View>
+      </View>
+     
+      {Platform.OS !== 'web' && showTimePicker && (
+       <DateTimePicker
+        value={newEntryTime}
+        mode="time"
+        display={Platform.OS === 'ios' ? 'compact' : 'default'}
+        onChange={(event, time) => {
+         setShowTimePicker(Platform.OS === 'ios');
+         if (time) setNewEntryTime(time);
+        }}
+       />
+      )}
+
+      <TouchableOpacity style={styles.addButton} onPress={addNewEntry}>
+       <Text style={styles.addButtonText}>Add Entry</Text>
+      </TouchableOpacity>
+     </View>
+    </View>
+
+    {/* Modal Actions - Fixed at bottom */}
+    <View style={styles.modalActions}>
+     <TouchableOpacity style={styles.closeButton} onPress={closeEditModal}>
+      <Text style={styles.closeButtonText}>Done</Text>
+     </TouchableOpacity>
+    </View>
+   </ScrollView>
+  );
+ };
+
+ return (
+  <View style={{flex: 1}}>
+   <ScrollView style={styles.container}>
+    <View style={styles.header}>
+     <Text style={styles.title}>{getTimeRangeTitle(timeRange)}</Text>
+     <Text style={styles.subtitle}>{getTimeRangeDescription(timeRange)}</Text>
+    </View>
+
+    <View style={styles.timeRangeSelector}>
+     <TouchableOpacity
+      style={[
+       styles.timeRangeButton,
+       timeRange === 'week' && styles.activeTimeRangeButton,
+      ]}
+      onPress={() => setTimeRange('week')}
+     >
+      <Text
+       style={[
+        styles.timeRangeButtonText,
+        timeRange === 'week' && styles.activeTimeRangeButtonText,
+       ]}
+      >
+       Week
+      </Text>
+     </TouchableOpacity>
+
+     <TouchableOpacity
+      style={[
+       styles.timeRangeButton,
+       timeRange === 'month' && styles.activeTimeRangeButton,
+      ]}
+      onPress={() => setTimeRange('month')}
+     >
+      <Text
+       style={[
+        styles.timeRangeButtonText,
+        timeRange === 'month' && styles.activeTimeRangeButtonText,
+       ]}
+      >
+       Month
+      </Text>
+     </TouchableOpacity>
+
+     <TouchableOpacity
+      style={[
+       styles.timeRangeButton,
+       timeRange === 'year' && styles.activeTimeRangeButton,
+      ]}
+      onPress={() => setTimeRange('year')}
+     >
+      <Text
+       style={[
+        styles.timeRangeButtonText,
+        timeRange === 'year' && styles.activeTimeRangeButtonText,
+       ]}
+      >
+       Year
+      </Text>
+     </TouchableOpacity>
+    </View>
+
+    <DrinkChart
+     data={chartData || { labels: [], data: [] }}
+     timeRange={timeRange}
+     loading={loading}
+    />
+
+    {chartData && !loading && (
+     <View style={styles.statsContainer}>
+      <View style={styles.statCard}>
+       <Text style={styles.statNumber}>
+        {chartData.data.reduce((sum, val) => sum + val, 0)}
+       </Text>
+       <Text style={styles.statLabel}>
+        Total {timeRange === 'week' ? 'Drinks' : timeRange === 'month' ? 'Drinks' : 'Drinks'}
+       </Text>
+      </View>
+
+      <View style={styles.statCard}>
+       <Text style={styles.statNumber}>
+        {chartData.data.length > 0
+         ? Math.round((chartData.data.reduce((sum, val) => sum + val, 0) / chartData.data.length) * 10) / 10
+         : 0
+        }
+       </Text>
+       <Text style={styles.statLabel}>
+        Average per {timeRange === 'week' ? 'Day' : timeRange === 'month' ? 'Week' : 'Month'}
+       </Text>
+      </View>
+
+      <View style={styles.statCard}>
+       <Text style={styles.statNumber}>
+        {Math.max(...(chartData.data.length > 0 ? chartData.data : [0]))}
+       </Text>
+       <Text style={styles.statLabel}>
+        Peak {timeRange === 'week' ? 'Day' : timeRange === 'month' ? 'Week' : 'Month'}
+       </Text>
+      </View>
+     </View>
+    )}
+
+    {/* Edit History Button */}
+    <View style={styles.editHistorySection}>
+     <TouchableOpacity style={styles.editHistoryButton} onPress={openEditModal}>
+      <Text style={styles.editHistoryButtonText}>📅 Edit History</Text>
+     </TouchableOpacity>
+    </View>
+   </ScrollView>
 
    {/* Historical Edit Modal */}
    <Modal
@@ -329,274 +612,10 @@ export default function HistoryScreen() {
     onRequestClose={closeEditModal}
    >
     <View style={styles.modalOverlay}>
-     <ScrollView style={styles.modalScrollContainer} contentContainerStyle={styles.modalContent}>
-      <Text style={styles.modalTitle}>Edit Historical Data</Text>
-     
-      {/* Date Selector */}
-      <View style={styles.dateSection}>
-       <Text style={styles.fieldLabel}>Select Date</Text>
-          {Platform.OS === 'web' ? (
-              <View style={styles.webDateInputContainer}>
-                  <input
-                      type="date"
-                      value={selectedDate.toISOString().split('T')[0]}
-                      onChange={selectDate}
-                      max={new Date().toISOString().split('T')[0]}
-                      style={{
-                          width: '100%',
-                          maxWidth: '100%',
-                          boxSizing: 'border-box',
-                          padding: '12px',
-                          fontSize: '16px',
-                          border: '1px solid #ddd',
-                          borderRadius: '6px',
-                          backgroundColor: '#f9f9f9',
-                          color: '#2c3e50',
-                      }}
-                  />
-              </View>
-          ) : (
-              <>
-                  {/* For Android, show the button. For iOS, don't. */}
-                  {Platform.OS !== 'ios' && (
-                      <TouchableOpacity
-                          style={styles.dateButton}
-                          onPress={() => setShowDatePicker(true)}
-                      >
-                          <Text style={styles.dateButtonText}>
-                              {selectedDate.toLocaleDateString('en-US', {
-                                  weekday: 'short',
-                                  month: 'short',
-                                  day: 'numeric',
-                                  year: 'numeric'
-                              })}
-                          </Text>
-                      </TouchableOpacity>
-                  )}
-                  {/* For iOS, show picker always. For Android, show on click */}
-                  {(showDatePicker || Platform.OS === 'ios') && (
-                      <View style={styles.iosDatePickerContainer}>
-                          <DateTimePicker
-                              value={selectedDate}
-                              mode="date"
-                              display="compact"
-                              onChange={selectDate}
-                              maximumDate={new Date()}
-                              style={styles.iosDatePicker}
-                          />
-                      </View>
-                  )}
-              </>
-          )}
-      </View>
-
-      {/* Existing Entries */}
-      <View style={styles.entriesSection}>
-       <Text style={styles.sectionLabel}>
-        Entries for {selectedDate.toLocaleDateString()}
-       </Text>
-       {selectedDateEntries.length === 0 ? (
-        <Text style={styles.noEntriesText}>No entries for this date</Text>
-       ) : (
-        <ScrollView style={styles.entriesList}>
-         {selectedDateEntries.map((entry) => (
-          <View key={entry.id} style={styles.entryItem}>
-           <View style={styles.entryInfo}>
-            <Text style={styles.entryCount}>{entry.drink_count} drink(s)</Text>
-            <Text style={styles.entryTime}>
-             {new Date(entry.logged_at).toLocaleTimeString()}
-            </Text>
-           </View>
-           <View style={styles.entryActions}>
-            <TouchableOpacity
-             style={styles.editButton}
-             onPress={() => startEditEntry(entry)}
-            >
-             <Text style={styles.editButtonText}>Edit</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-             style={styles.deleteButton}
-             onPress={() => deleteEntry(entry)}
-            >
-             <Text style={styles.deleteButtonText}>Delete</Text>
-             </TouchableOpacity>
-           </View>
-          </View>
-         ))}
-        </ScrollView>
-       )}
-      </View>
-
-      {/* Add New Entry Section */}
-      <View style={styles.addEntrySection}>
-       <Text style={styles.sectionLabel}>Add New Entry</Text>
-       <View style={styles.addEntryForm}>
-        <View style={styles.formRow}>
-         <View style={styles.countInput}>
-          <Text style={styles.inputLabel}>Drinks</Text>
-          <TextInput
-           style={styles.numberInput}
-           value={newEntryCount}
-           onChangeText={setNewEntryCount}
-           keyboardType="number-pad"
-           placeholder="0"
-          />
-         </View>
-         <View style={styles.timeInput}>
-          <Text style={styles.inputLabel}>Time</Text>
-          {Platform.OS === 'web' ? (
-           <View style={styles.webDateInputContainer}>
-             <input
-                 type="time"
-                 value={newEntryTime.toTimeString().slice(0, 5)}
-                 onChange={(e) => {
-                     const [hours, minutes] = e.target.value.split(':');
-                     const newTime = new Date();
-                     newTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-                     setNewEntryTime(newTime);
-                 }}
-                 style={{
-                     width: '100%',
-                     maxWidth: '100%',
-                     boxSizing: 'border-box',
-                     padding: '12px',
-                     fontSize: '16px',
-                     border: '1px solid #ddd',
-                     borderRadius: '6px',
-                     backgroundColor: '#f9f9f9',
-                     color: '#2c3e50',
-                 }}
-             />
-           </View>
-          ) : (
-           <TouchableOpacity
-            style={styles.timeButton}
-            onPress={() => setShowTimePicker(true)}
-           >
-             <Text style={styles.timeButtonText}>
-                 {newEntryTime.toLocaleTimeString()}
-             </Text>
-           </TouchableOpacity>
-          )}
-         </View>
-        </View>
-       
-        {Platform.OS !== 'web' && showTimePicker && (
-         <DateTimePicker
-          value={newEntryTime}
-          mode="time"
-          display={Platform.OS === 'ios' ? 'compact' : 'default'}
-          onChange={(event, time) => {
-           setShowTimePicker(Platform.OS === 'ios');
-           if (time) setNewEntryTime(time);
-          }}
-         />
-        )}
-
-        <TouchableOpacity style={styles.addButton} onPress={addNewEntry}>
-         <Text style={styles.addButtonText}>Add Entry</Text>
-        </TouchableOpacity>
-       </View>
-      </View>
-
-      {/* Modal Actions - Fixed at bottom */}
-      <View style={styles.modalActions}>
-       <TouchableOpacity style={styles.closeButton} onPress={closeEditModal}>
-        <Text style={styles.closeButtonText}>Done</Text>
-       </TouchableOpacity>
-      </View>
-     </ScrollView>
+     {renderModalContent()}
     </View>
    </Modal>
-
-   {/* Edit Entry Modal */}
-   {editingEntry && (
-    <Modal
-     visible={editingEntry !== null}
-     transparent={true}
-     animationType="slide"
-     onRequestClose={() => setEditingEntry(null)}
-    >
-     <View style={styles.modalOverlay}>
-      <View style={styles.editModalContent}>
-       <Text style={styles.modalTitle}>Edit Entry</Text>
-      
-       <View style={styles.editField}>
-        <Text style={styles.fieldLabel}>Number of Drinks</Text>
-        <TextInput
-         style={styles.editInput}
-         value={editCount}
-         onChangeText={setEditCount}
-         keyboardType="number-pad"
-         placeholder="Enter number of drinks"
-        />
-       </View>
-
-       <View style={styles.editField}>
-        <Text style={styles.fieldLabel}>Time</Text>
-        {Platform.OS === 'web' ? (
-         <View style={styles.webDateInputContainer}>
-          <input
-           type="time"
-           value={editTime.toTimeString().slice(0, 5)}
-           onChange={(e) => {
-            const [hours, minutes] = e.target.value.split(':');
-            const newTime = new Date(editTime);
-            newTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
-            setEditTime(newTime);
-           }}
-           style={{
-            width: '100%',
-            maxWidth: '100%',
-            boxSizing: 'border-box',
-            padding: '12px',
-            fontSize: '16px',
-             border: '1px solid #ddd',
-             borderRadius: '6px',
-             backgroundColor: '#f9f9f9',
-             color: '#2c3e50',
-           }}
-          />
-         </View>
-        ) : (
-         <TouchableOpacity
-          style={styles.timeButton}
-          onPress={() => setShowTimePicker(true)}
-         >
-          <Text style={styles.timeButtonText}>
-           {editTime.toLocaleTimeString()}
-          </Text>
-         </TouchableOpacity>
-        )}
-       </View>
-
-       <View style={styles.modalButtons}>
-        <TouchableOpacity
-         style={styles.cancelButton}
-         onPress={() => setEditingEntry(null)}
-        >
-         <Text style={styles.cancelButtonText}>Cancel</Text>
-         </TouchableOpacity>
-         <TouchableOpacity
-             style={styles.saveButton}
-             onPress={saveEditEntry}
-         >
-             <Text style={styles.saveButtonText}>Save</Text>
-         </TouchableOpacity>
-       </View>
-      </View>
-     </View>
-    </Modal>
-   )}
-
-   <ConfirmationPopup
-    visible={isPopupVisible}
-    onConfirm={handleConfirmDelete}
-    onCancel={() => setPopupVisible(false)}
-    title="Delete Entry"
-    message={`Are you sure you want to delete ${selectedEntry?.drink_count} drink(s)?`}
-   />
-  </ScrollView>
+  </View>
  );
 }
 
@@ -932,6 +951,13 @@ const styles = StyleSheet.create({
    borderRadius: 6,
    alignItems: 'center',
  },
+ deleteConfirmButton: {
+  flex: 1,
+  padding: 12,
+  backgroundColor: '#e74c3c',
+  borderRadius: 6,
+  alignItems: 'center',
+ },
  cancelButtonText: {
    color: 'white',
    fontWeight: 'bold',
@@ -939,5 +965,10 @@ const styles = StyleSheet.create({
  saveButtonText: {
    color: 'white',
    fontWeight: 'bold',
+ },
+ message: {
+  fontSize: 16,
+  marginBottom: 20,
+  textAlign: 'center',
  },
 });
