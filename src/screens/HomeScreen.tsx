@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, TextInput, Platform } from 'react-native';
+import { useIsFocused } from '@react-navigation/native';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { drinkService } from '../services/drinkService';
 import { DrinkEntry } from '../types';
@@ -15,10 +16,13 @@ export default function HomeScreen() {
   const [showTimePicker, setShowTimePicker] = useState(false);
   const [isPopupVisible, setPopupVisible] = useState(false);
   const [selectedEntry, setSelectedEntry] = useState<DrinkEntry | null>(null);
+  const isFocused = useIsFocused();
 
   useEffect(() => {
-    loadData();
-  }, []);
+    if (isFocused) {
+      loadData();
+    }
+  }, [isFocused]);
 
   const loadData = async () => {
     try {
