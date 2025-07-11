@@ -87,6 +87,46 @@ export const drinkService = {
     return data;
   },
 
+  async getDrinksForDate(date: string): Promise<DrinkEntry[]> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    const startOfDay = `${date}T00:00:00.000Z`;
+    const endOfDay = `${date}T23:59:59.999Z`;
+
+    const { data, error } = await supabase
+      .from('drink_entries')
+      .select('*')
+      .eq('user_id', user.id)
+      .gte('logged_at', startOfDay)
+      .lte('logged_at', endOfDay)
+      .order('logged_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  },
+
+  async addDrinkEntryForDate(drinkCount: number, date: string, time: string = '12:00'): Promise<DrinkEntry | null> {
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError) throw new Error('Authentication error: ' + authError.message);
+    if (!user) throw new Error('User not authenticated');
+
+    const dateTime = `${date}T${time}:00.000Z`;
+
+    const { data, error } = await supabase
+      .from('drink_entries')
+      .insert({
+        user_id: user.id,
+        drink_count: drinkCount,
+        logged_at: dateTime,
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   async getAverageDrinksPerDay(): Promise<{ average: number; daysSinceJoined: number }> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');
