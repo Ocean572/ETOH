@@ -55,6 +55,45 @@ export default function SettingsScreen() {
     }
   };
 
+  const showImagePickerOptions = () => {
+    Alert.alert(
+      'Select Profile Picture',
+      'Choose how you want to update your profile picture',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Take Photo', onPress: takePhoto },
+        { text: 'Choose from Library', onPress: pickImage },
+      ],
+      { cancelable: true }
+    );
+  };
+
+  const takePhoto = async () => {
+    try {
+      const { status } = await ImagePicker.requestCameraPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Required', 'Please grant camera permissions to take a photo.');
+        return;
+      }
+
+      const result = await ImagePicker.launchCameraAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (!result.canceled && result.assets[0]) {
+        const imageUri = result.assets[0].uri;
+        await settingsService.updateProfile({ profile_picture_url: imageUri });
+        await loadData();
+        Alert.alert('Success', 'Profile picture updated!');
+      }
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
   const pickImage = async () => {
     try {
       const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -167,7 +206,7 @@ export default function SettingsScreen() {
 
       {/* Profile Picture */}
       <View style={styles.profileSection}>
-        <TouchableOpacity style={styles.profilePictureContainer} onPress={pickImage}>
+        <TouchableOpacity style={styles.profilePictureContainer} onPress={showImagePickerOptions}>
           {profile?.profile_picture_url ? (
             <Image source={{ uri: profile.profile_picture_url }} style={styles.profilePicture} />
           ) : (
@@ -177,8 +216,8 @@ export default function SettingsScreen() {
             </View>
           )}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.changePictureButton} onPress={pickImage}>
-          <Text style={styles.changePictureText}>Change Profile Picture</Text>
+        <TouchableOpacity style={styles.changePictureButton} onPress={showImagePickerOptions}>
+          <Text style={styles.changePictureText}>📷 Change Profile Picture</Text>
         </TouchableOpacity>
       </View>
 
