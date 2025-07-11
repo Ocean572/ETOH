@@ -2,7 +2,7 @@ import { drinkService } from './drinkService';
 import { calculateRiskLevel, RiskLevel } from '../utils/healthCalculations';
 
 export interface HealthAssessmentData {
-  weeklyAverage: number;
+  weeklyTotal: number; // Total drinks in the past 7 days
   riskLevel: RiskLevel;
   personalizedWarnings: string[];
   recommendations: string[];
@@ -16,16 +16,17 @@ export interface RiskFactors {
 
 export const healthService = {
   async getPersonalizedHealthAssessment(): Promise<HealthAssessmentData> {
+    // Use the actual weekly total (last 7 days) instead of average × 7
     const weeklyTotal = await drinkService.getWeeklyTotal();
     const avgData = await drinkService.getAverageDrinksPerDay();
-    const weeklyAverage = avgData.average * 7;
     
-    const riskAssessment = calculateRiskLevel(weeklyAverage);
-    const personalizedWarnings = this.getPersonalizedWarnings(weeklyAverage, avgData.average);
-    const recommendations = this.getPersonalizedRecommendations(riskAssessment.level, weeklyAverage);
+    // Use actual weekly consumption for risk assessment
+    const riskAssessment = calculateRiskLevel(weeklyTotal);
+    const personalizedWarnings = this.getPersonalizedWarnings(weeklyTotal, avgData.average);
+    const recommendations = this.getPersonalizedRecommendations(riskAssessment.level, weeklyTotal);
     
     return {
-      weeklyAverage,
+      weeklyTotal: weeklyTotal,
       riskLevel: riskAssessment.level,
       personalizedWarnings,
       recommendations,

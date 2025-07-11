@@ -75,6 +75,18 @@ export const drinkService = {
     if (error) throw error;
   },
 
+  async updateDrinkEntry(id: string, updates: { drink_count?: number; logged_at?: string }): Promise<DrinkEntry> {
+    const { data, error } = await supabase
+      .from('drink_entries')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  },
+
   async getAverageDrinksPerDay(): Promise<{ average: number; daysSinceJoined: number }> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');

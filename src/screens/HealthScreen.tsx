@@ -87,7 +87,7 @@ export default function HealthScreen() {
             </View>
           </View>
           <Text style={styles.riskDescription}>
-            Based on your weekly average of {healthData.weeklyAverage.toFixed(1)} drinks
+            Based on your last 7 days: {healthData.weeklyTotal} drinks
           </Text>
           
           {healthData.personalizedWarnings.length > 0 && (

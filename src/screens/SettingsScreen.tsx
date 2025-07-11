@@ -10,6 +10,7 @@ import {
   Image,
   Keyboard
 } from 'react-native';
+import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
 import { settingsService } from '../services/settingsService';
 import { goalService } from '../services/goalService';
@@ -27,6 +28,13 @@ export default function SettingsScreen() {
   useEffect(() => {
     loadData();
   }, []);
+
+  // Refresh data when screen comes into focus (e.g., navigating back from Goals)
+  useFocusEffect(
+    React.useCallback(() => {
+      loadData();
+    }, [])
+  );
 
   const loadData = async () => {
     try {

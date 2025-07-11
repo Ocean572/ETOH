@@ -18,25 +18,30 @@ export const authService = {
   },
 
   async signIn(email: string, password: string) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
-    
-    if (error) {
-      // Provide more helpful error messages
-      if (error.message.includes('Invalid login credentials')) {
-        throw new Error('Invalid email or password. Please check your credentials or sign up for a new account.');
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      
+      if (error) {
+        // Provide more helpful error messages
+        if (error.message.includes('Invalid login credentials') || error.message.includes('Invalid')) {
+          throw new Error('Account not found. The database was recently reset - please create a new account by signing up.');
+        }
+        throw error;
       }
+      
+      // Ensure profile exists for existing users
+      if (data.user) {
+        await this.ensureProfile(data.user.id, data.user.email || email);
+      }
+      
+      return data;
+    } catch (error: any) {
+      console.error('Sign in error:', error);
       throw error;
     }
-    
-    // Ensure profile exists for existing users
-    if (data.user) {
-      await this.ensureProfile(data.user.id, data.user.email || email);
-    }
-    
-    return data;
   },
 
   async createProfile(userId: string, email: string) {
