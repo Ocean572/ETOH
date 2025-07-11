@@ -16,7 +16,7 @@ import { settingsService } from '../services/settingsService';
 import { goalService } from '../services/goalService';
 import { UserProfile, UserGoal } from '../types';
 
-export default function SettingsScreen() {
+export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [currentGoal, setCurrentGoal] = useState<UserGoal | null>(null);
   const [fullName, setFullName] = useState('');
@@ -200,7 +200,7 @@ export default function SettingsScreen() {
   return (
     <ScrollView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>Profile</Text>
         <Text style={styles.subtitle}>Manage your profile and preferences</Text>
       </View>
 

@@ -67,7 +67,14 @@ export default function HistoryScreen() {
 
   const openEditModal = async () => {
     setShowEditModal(true);
-    await loadSelectedDateEntries();
+    // Always load entries for the current selected date when opening modal
+    try {
+      const dateString = selectedDate.toISOString().split('T')[0];
+      const entries = await drinkService.getDrinksForDate(dateString);
+      setSelectedDateEntries(entries);
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
   };
 
   const closeEditModal = () => {
@@ -89,16 +96,36 @@ export default function HistoryScreen() {
   };
 
   const selectDate = async (event: any, date?: Date) => {
-    setShowDatePicker(Platform.OS === 'ios');
-    if (date) {
-      setSelectedDate(date);
-      // Load entries for the newly selected date
-      try {
-        const dateString = date.toISOString().split('T')[0];
-        const entries = await drinkService.getDrinksForDate(dateString);
-        setSelectedDateEntries(entries);
-      } catch (error: any) {
-        Alert.alert('Error', error.message);
+    if (Platform.OS === 'web') {
+      // On web, event is the HTML input event
+      const selectedDate = event.target ? new Date(event.target.value) : date;
+      if (selectedDate && !isNaN(selectedDate.getTime())) {
+        setSelectedDate(selectedDate);
+        // Load entries for the newly selected date
+        try {
+          const dateString = selectedDate.toISOString().split('T')[0];
+          const entries = await drinkService.getDrinksForDate(dateString);
+          setSelectedDateEntries(entries);
+        } catch (error: any) {
+          Alert.alert('Error', error.message);
+        }
+      }
+    } else {
+      // On iOS/Android, close the picker after selection
+      if (date) {
+        setSelectedDate(date);
+        setShowDatePicker(false); // Always hide picker after selection
+        // Load entries for the newly selected date
+        try {
+          const dateString = date.toISOString().split('T')[0];
+          const entries = await drinkService.getDrinksForDate(dateString);
+          setSelectedDateEntries(entries);
+        } catch (error: any) {
+          Alert.alert('Error', error.message);
+        }
+      } else {
+        // If no date selected, just hide the picker
+        setShowDatePicker(false);
       }
     }
   };
@@ -289,93 +316,144 @@ export default function HistoryScreen() {
         onRequestClose={closeEditModal}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
+          <ScrollView style={styles.modalScrollContainer} contentContainerStyle={styles.modalContent}>
             <Text style={styles.modalTitle}>Edit Historical Data</Text>
             
             {/* Date Selector */}
             <View style={styles.dateSection}>
               <Text style={styles.fieldLabel}>Select Date</Text>
-              <TouchableOpacity 
-                style={styles.dateButton}
-                onPress={() => setShowDatePicker(true)}
-              >
-                <Text style={styles.dateButtonText}>
-                  {selectedDate.toLocaleDateString('en-US', { 
-                    weekday: 'short', 
-                    month: 'short', 
-                    day: 'numeric',
-                    year: 'numeric'
-                  })}
-                </Text>
-              </TouchableOpacity>
-            </View>
-
-            {showDatePicker && (
-              <DateTimePicker
-                value={selectedDate}
-                mode="date"
-                display="compact"
-                onChange={selectDate}
-                maximumDate={new Date()}
-              />
-            )}
-
-            {/* Scrollable Content */}
-            <ScrollView style={styles.modalScrollView} showsVerticalScrollIndicator={false}>
-              {/* Existing Entries */}
-              <View style={styles.entriesSection}>
-                <Text style={styles.sectionLabel}>
-                  Entries for {selectedDate.toLocaleDateString()}
-                </Text>
-                {selectedDateEntries.length === 0 ? (
-                  <Text style={styles.noEntriesText}>No entries for this date</Text>
-                ) : (
-                  <ScrollView style={styles.entriesList} nestedScrollEnabled={true}>
-                    {selectedDateEntries.map((entry) => (
-                      <View key={entry.id} style={styles.entryItem}>
-                        <View style={styles.entryInfo}>
-                          <Text style={styles.entryCount}>{entry.drink_count} drink(s)</Text>
-                          <Text style={styles.entryTime}>
-                            {new Date(entry.logged_at).toLocaleTimeString()}
-                          </Text>
-                        </View>
-                        <View style={styles.entryActions}>
-                          <TouchableOpacity 
-                            style={styles.editButton}
-                            onPress={() => startEditEntry(entry)}
-                          >
-                            <Text style={styles.editButtonText}>Edit</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            style={styles.deleteButton}
-                            onPress={() => deleteEntry(entry)}
-                          >
-                            <Text style={styles.deleteButtonText}>Delete</Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    ))}
-                  </ScrollView>
-                )}
-              </View>
-
-              {/* Add New Entry */}
-              <View style={styles.addEntrySection}>
-                <Text style={styles.sectionLabel}>Add New Entry</Text>
-                <View style={styles.addEntryForm}>
-                  <View style={styles.formRow}>
-                    <View style={styles.countInput}>
-                      <Text style={styles.inputLabel}>Drinks</Text>
-                      <TextInput
-                        style={styles.numberInput}
-                        value={newEntryCount}
-                        onChangeText={setNewEntryCount}
-                        keyboardType="number-pad"
-                        placeholder="0"
+              {Platform.OS === 'web' ? (
+                <View style={styles.webDateInputContainer}>
+                  <input
+                    type="date"
+                    value={selectedDate.toISOString().split('T')[0]}
+                    onChange={selectDate}
+                    max={new Date().toISOString().split('T')[0]}
+                    style={{
+                      width: '100%',
+                      maxWidth: '100%',
+                      boxSizing: 'border-box',
+                      padding: '12px',
+                      fontSize: '16px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      backgroundColor: '#f9f9f9',
+                      color: '#2c3e50',
+                    }}
+                  />
+                </View>
+              ) : (
+                <>
+                  <TouchableOpacity 
+                    style={styles.dateButton}
+                    onPress={() => setShowDatePicker(true)}
+                  >
+                    <Text style={styles.dateButtonText}>
+                      {selectedDate.toLocaleDateString('en-US', { 
+                        weekday: 'short', 
+                        month: 'short', 
+                        day: 'numeric',
+                        year: 'numeric'
+                      })}
+                    </Text>
+                  </TouchableOpacity>
+                  
+                  {/* iOS Date Picker - Shows when date is clicked */}
+                  {showDatePicker && (
+                    <View style={styles.iosDatePickerContainer}>
+                      <DateTimePicker
+                        value={selectedDate}
+                        mode="date"
+                        display="compact"
+                        onChange={selectDate}
+                        maximumDate={new Date()}
+                        style={styles.iosDatePicker}
                       />
                     </View>
-                    <View style={styles.timeInput}>
-                      <Text style={styles.inputLabel}>Time</Text>
+                  )}
+                </>
+              )}
+            </View>
+
+            {/* Existing Entries */}
+            <View style={styles.entriesSection}>
+              <Text style={styles.sectionLabel}>
+                Entries for {selectedDate.toLocaleDateString()}
+              </Text>
+              {selectedDateEntries.length === 0 ? (
+                <Text style={styles.noEntriesText}>No entries for this date</Text>
+              ) : (
+                <ScrollView style={styles.entriesList}>
+                  {selectedDateEntries.map((entry) => (
+                    <View key={entry.id} style={styles.entryItem}>
+                      <View style={styles.entryInfo}>
+                        <Text style={styles.entryCount}>{entry.drink_count} drink(s)</Text>
+                        <Text style={styles.entryTime}>
+                          {new Date(entry.logged_at).toLocaleTimeString()}
+                        </Text>
+                      </View>
+                      <View style={styles.entryActions}>
+                        <TouchableOpacity 
+                          style={styles.editButton}
+                          onPress={() => startEditEntry(entry)}
+                        >
+                          <Text style={styles.editButtonText}>Edit</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity 
+                          style={styles.deleteButton}
+                          onPress={() => deleteEntry(entry)}
+                        >
+                          <Text style={styles.deleteButtonText}>Delete</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+
+            {/* Add New Entry Section */}
+            <View style={styles.addEntrySection}>
+              <Text style={styles.sectionLabel}>Add New Entry</Text>
+              <View style={styles.addEntryForm}>
+                <View style={styles.formRow}>
+                  <View style={styles.countInput}>
+                    <Text style={styles.inputLabel}>Drinks</Text>
+                    <TextInput
+                      style={styles.numberInput}
+                      value={newEntryCount}
+                      onChangeText={setNewEntryCount}
+                      keyboardType="number-pad"
+                      placeholder="0"
+                    />
+                  </View>
+                  <View style={styles.timeInput}>
+                    <Text style={styles.inputLabel}>Time</Text>
+                    {Platform.OS === 'web' ? (
+                      <View style={styles.webDateInputContainer}>
+                        <input
+                          type="time"
+                          value={newEntryTime.toTimeString().slice(0, 5)}
+                          onChange={(e) => {
+                            const [hours, minutes] = e.target.value.split(':');
+                            const newTime = new Date();
+                            newTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                            setNewEntryTime(newTime);
+                          }}
+                          style={{
+                            width: '100%',
+                            maxWidth: '100%',
+                            boxSizing: 'border-box',
+                            padding: '12px',
+                            fontSize: '16px',
+                            border: '1px solid #ddd',
+                            borderRadius: '6px',
+                            backgroundColor: '#f9f9f9',
+                            color: '#2c3e50',
+                          }}
+                        />
+                      </View>
+                    ) : (
                       <TouchableOpacity 
                         style={styles.timeButton}
                         onPress={() => setShowTimePicker(true)}
@@ -384,27 +462,27 @@ export default function HistoryScreen() {
                           {newEntryTime.toLocaleTimeString()}
                         </Text>
                       </TouchableOpacity>
-                    </View>
+                    )}
                   </View>
-                  
-                  {showTimePicker && (
-                    <DateTimePicker
-                      value={newEntryTime}
-                      mode="time"
-                      display={Platform.OS === 'ios' ? 'compact' : 'default'}
-                      onChange={(event, time) => {
-                        setShowTimePicker(Platform.OS === 'ios');
-                        if (time) setNewEntryTime(time);
-                      }}
-                    />
-                  )}
-
-                  <TouchableOpacity style={styles.addButton} onPress={addNewEntry}>
-                    <Text style={styles.addButtonText}>Add Entry</Text>
-                  </TouchableOpacity>
                 </View>
+                
+                {Platform.OS !== 'web' && showTimePicker && (
+                  <DateTimePicker
+                    value={newEntryTime}
+                    mode="time"
+                    display={Platform.OS === 'ios' ? 'compact' : 'default'}
+                    onChange={(event, time) => {
+                      setShowTimePicker(Platform.OS === 'ios');
+                      if (time) setNewEntryTime(time);
+                    }}
+                  />
+                )}
+
+                <TouchableOpacity style={styles.addButton} onPress={addNewEntry}>
+                  <Text style={styles.addButtonText}>Add Entry</Text>
+                </TouchableOpacity>
               </View>
-            </ScrollView>
+            </View>
 
             {/* Modal Actions - Fixed at bottom */}
             <View style={styles.modalActions}>
@@ -412,7 +490,7 @@ export default function HistoryScreen() {
                 <Text style={styles.closeButtonText}>Done</Text>
               </TouchableOpacity>
             </View>
-          </View>
+          </ScrollView>
         </View>
       </Modal>
 
@@ -441,14 +519,40 @@ export default function HistoryScreen() {
 
               <View style={styles.editField}>
                 <Text style={styles.fieldLabel}>Time</Text>
-                <TouchableOpacity 
-                  style={styles.timeButton}
-                  onPress={() => setShowTimePicker(true)}
-                >
-                  <Text style={styles.timeButtonText}>
-                    {editTime.toLocaleTimeString()}
-                  </Text>
-                </TouchableOpacity>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.webDateInputContainer}>
+                    <input
+                      type="time"
+                      value={editTime.toTimeString().slice(0, 5)}
+                      onChange={(e) => {
+                        const [hours, minutes] = e.target.value.split(':');
+                        const newTime = new Date(editTime);
+                        newTime.setHours(parseInt(hours), parseInt(minutes), 0, 0);
+                        setEditTime(newTime);
+                      }}
+                      style={{
+                        width: '100%',
+                        maxWidth: '100%',
+                        boxSizing: 'border-box',
+                        padding: '12px',
+                        fontSize: '16px',
+                        border: '1px solid #ddd',
+                        borderRadius: '6px',
+                        backgroundColor: '#f9f9f9',
+                        color: '#2c3e50',
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <TouchableOpacity 
+                    style={styles.timeButton}
+                    onPress={() => setShowTimePicker(true)}
+                  >
+                    <Text style={styles.timeButtonText}>
+                      {editTime.toLocaleTimeString()}
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               <View style={styles.modalButtons}>
@@ -568,13 +672,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  modalContent: {
+  modalScrollContainer: {
+    width: '90%',
+    maxWidth: 500,
+    maxHeight: '85%',
     backgroundColor: 'white',
     borderRadius: 12,
+  },
+  modalContent: {
     padding: 20,
-    width: '90%',
-    maxHeight: '85%',
-    flexDirection: 'column',
+    flexGrow: 1,
   },
   modalTitle: {
     fontSize: 18,
@@ -586,9 +693,14 @@ const styles = StyleSheet.create({
   dateSection: {
     marginBottom: 15,
   },
+  webDateInputContainer: {
+    width: '100%',
+    maxWidth: '100%',
+    overflow: 'hidden',
+  },
   modalScrollView: {
     flex: 1,
-    marginBottom: 15,
+    paddingHorizontal: 0,
   },
   fieldLabel: {
     fontSize: 14,
@@ -607,11 +719,21 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: '#2c3e50',
   },
+  iosDatePickerContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
+    marginBottom: 15,
+    paddingVertical: 10,
+  },
+  iosDatePicker: {
+    height: 120,
+  },
   entriesSection: {
     marginBottom: 15,
   },
   entriesList: {
-    maxHeight: 120,
+    maxHeight: 200,
+    marginBottom: 10,
   },
   sectionLabel: {
     fontSize: 16,
@@ -682,13 +804,16 @@ const styles = StyleSheet.create({
   },
   formRow: {
     flexDirection: 'row',
-    gap: 15,
+    gap: 10,
+    width: '100%',
   },
   countInput: {
     flex: 1,
+    minWidth: 0,
   },
   timeInput: {
     flex: 2,
+    minWidth: 0,
   },
   inputLabel: {
     fontSize: 14,
@@ -704,6 +829,8 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#f9f9f9',
     textAlign: 'center',
+    width: '100%',
+    maxWidth: '100%',
   },
   timeButton: {
     borderWidth: 1,
@@ -711,6 +838,8 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     padding: 12,
     backgroundColor: '#f9f9f9',
+    width: '100%',
+    maxWidth: '100%',
   },
   timeButtonText: {
     fontSize: 16,
