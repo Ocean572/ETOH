@@ -149,24 +149,46 @@ export default function FriendsScreen() {
     return (
       <View key={request.id} style={styles.requestCard}>
         <View style={styles.profileSection}>
-          {profile?.profile_picture_url ? (
-            <Image source={{ uri: profile.profile_picture_url }} style={styles.profileImage} />
+          {/* For sent requests (pending), only show email with placeholder avatar */}
+          {!isReceived ? (
+            <>
+              <View style={styles.profilePlaceholder}>
+                <Text style={styles.profileInitial}>
+                  {profile?.email.charAt(0).toUpperCase()}
+                </Text>
+              </View>
+              <View style={styles.profileInfo}>
+                <Text style={[styles.profileEmail, styles.pendingText]}>
+                  {profile?.email}
+                </Text>
+                <Text style={[styles.requestStatus, styles.pendingText]}>
+                  Pending
+                </Text>
+              </View>
+            </>
           ) : (
-            <View style={styles.profilePlaceholder}>
-              <Text style={styles.profileInitial}>
-                {profile?.full_name?.charAt(0) || profile?.email.charAt(0).toUpperCase()}
-              </Text>
-            </View>
+            /* For received requests, show full profile info */
+            <>
+              {profile?.profile_picture_url ? (
+                <Image source={{ uri: profile.profile_picture_url }} style={styles.profileImage} />
+              ) : (
+                <View style={styles.profilePlaceholder}>
+                  <Text style={styles.profileInitial}>
+                    {profile?.full_name?.charAt(0) || profile?.email.charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+              <View style={styles.profileInfo}>
+                <Text style={styles.profileName}>
+                  {profile?.full_name || profile?.email}
+                </Text>
+                <Text style={styles.profileEmail}>{profile?.email}</Text>
+                <Text style={styles.requestStatus}>
+                  Sent you a friend request
+                </Text>
+              </View>
+            </>
           )}
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>
-              {profile?.full_name || profile?.email}
-            </Text>
-            <Text style={styles.profileEmail}>{profile?.email}</Text>
-            <Text style={styles.requestStatus}>
-              {isReceived ? 'Sent you a friend request' : 'Friend request sent - Pending'}
-            </Text>
-          </View>
         </View>
         
         {isReceived && (
@@ -437,6 +459,10 @@ const styles = StyleSheet.create({
     color: '#856404',
     marginTop: 4,
     fontStyle: 'italic',
+  },
+  pendingText: {
+    fontStyle: 'italic',
+    color: '#999',
   },
   friendSince: {
     fontSize: 12,
