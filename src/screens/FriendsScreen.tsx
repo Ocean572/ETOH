@@ -13,6 +13,7 @@ import {
 import { friendsService, FriendRequest, Friend } from '../services/friendsService';
 import { supabase } from '../services/supabase';
 import ConfirmationPopup from '../components/ConfirmationPopup';
+import FriendDetailModal from '../components/FriendDetailModal';
 
 export default function FriendsScreen() {
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -24,6 +25,8 @@ export default function FriendsScreen() {
   const [currentUser, setCurrentUser] = useState<any>(null);
   const [isPopupVisible, setPopupVisible] = useState(false);
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
+  const [showFriendDetail, setShowFriendDetail] = useState(false);
+  const [selectedFriendForDetail, setSelectedFriendForDetail] = useState<Friend | null>(null);
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -211,9 +214,23 @@ export default function FriendsScreen() {
     );
   };
 
+  const openFriendDetail = (friend: Friend) => {
+    setSelectedFriendForDetail(friend);
+    setShowFriendDetail(true);
+  };
+
+  const closeFriendDetail = () => {
+    setShowFriendDetail(false);
+    setSelectedFriendForDetail(null);
+  };
+
   const renderFriend = (friend: Friend) => {
     return (
-      <View key={friend.id} style={styles.friendCard}>
+      <TouchableOpacity
+        key={friend.id} 
+        style={styles.friendCard}
+        onPress={() => openFriendDetail(friend)}
+      >
         <View style={styles.profileSection}>
           {friend.friend_profile.profile_picture_url ? (
             <Image
@@ -240,11 +257,14 @@ export default function FriendsScreen() {
         
         <TouchableOpacity
           style={styles.removeButton}
-          onPress={() => removeFriend(friend)}
+          onPress={(e) => {
+            e.stopPropagation();
+            removeFriend(friend);
+          }}
         >
           <Text style={styles.removeButtonText}>Remove</Text>
         </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -322,6 +342,12 @@ export default function FriendsScreen() {
         onCancel={() => setPopupVisible(false)}
         title="Remove Friend"
         message={`Are you sure you want to remove ${selectedFriend?.friend_profile.full_name || selectedFriend?.friend_profile.email}?`}
+      />
+
+      <FriendDetailModal
+        visible={showFriendDetail}
+        friend={selectedFriendForDetail}
+        onClose={closeFriendDetail}
       />
     </ScrollView>
   );
