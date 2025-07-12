@@ -109,27 +109,24 @@ export const friendsService = {
   },
 
   async removeFriend(friendshipId: string): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('User not authenticated');
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('User not authenticated');
 
-    // Get the friendship details first
-    const { data: friendship, error: fetchError } = await supabase
-      .from('friendships')
-      .select('user_id, friend_id')
-      .eq('id', friendshipId)
-      .eq('user_id', user.id)
-      .single();
+    const { data, error } = await supabase.functions.invoke('remove-friend', {
+      body: { friendshipId },
+      headers: {
+        Authorization: `Bearer ${session.access_token}`,
+      },
+    });
 
-    if (fetchError) throw fetchError;
-    if (!friendship) throw new Error('Friendship not found');
+    if (error) {
+      console.error('Error calling remove-friend function:', error);
+      throw new Error('Failed to remove friend');
+    }
 
-    // Remove both friendship records
-    const { error: deleteError } = await supabase
-      .from('friendships')
-      .delete()
-      .or(`and(user_id.eq.${friendship.user_id},friend_id.eq.${friendship.friend_id}),and(user_id.eq.${friendship.friend_id},friend_id.eq.${friendship.user_id})`);
-
-    if (deleteError) throw deleteError;
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to remove friend');
+    }
   },
 
   // Real-time subscription for friend requests
@@ -160,6 +157,16 @@ export const friendsService = {
           schema: 'public',
           table: 'friendships',
           filter: `user_id=eq.${userId}`
+        },
+        callback
+      )
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'friendships',
+          filter: `friend_id=eq.${userId}`
         },
         callback
       )
