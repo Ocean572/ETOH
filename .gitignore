@@ -25,7 +25,6 @@ web-build/
 supabase/.branches
 supabase/.temp
 supabase/logs
-supabase/config.toml
 supabase/volumes/
 supabase/.branches/
 supabase/.temp/
