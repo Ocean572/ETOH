@@ -15,6 +15,7 @@ export interface UserProfile {
   profile_picture_url?: string;
   motivation_text?: string;
   reset_date?: string;
+  gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say';
   created_at: string;
   updated_at: string;
 }

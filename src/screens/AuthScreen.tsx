@@ -9,6 +9,8 @@ interface AuthScreenProps {
 export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [fullName, setFullName] = useState('');
+  const [gender, setGender] = useState<'male' | 'female' | 'other' | 'prefer_not_to_say' | ''>('');
   const [isSignUp, setIsSignUp] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -18,12 +20,24 @@ export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
       return;
     }
 
+    if (isSignUp && !fullName.trim()) {
+      Alert.alert('Error', 'Please enter your name');
+      return;
+    }
+
+    if (isSignUp && !gender) {
+      Alert.alert('Error', 'Please select your gender');
+      return;
+    }
+
     setLoading(true);
     try {
       if (isSignUp) {
-        await authService.signUp(email, password);
+        await authService.signUp(email, password, fullName.trim(), gender as 'male' | 'female' | 'other' | 'prefer_not_to_say');
         Alert.alert('Success', 'Account created! You can now sign in.');
         setIsSignUp(false);
+        setFullName('');
+        setGender('');
       } else {
         await authService.signIn(email, password);
         onAuthSuccess();
@@ -50,6 +64,16 @@ export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
           autoCapitalize="none"
         />
         
+        {isSignUp && (
+          <TextInput
+            style={styles.input}
+            placeholder="Full Name"
+            value={fullName}
+            onChangeText={setFullName}
+            autoCapitalize="words"
+          />
+        )}
+        
         <TextInput
           style={styles.input}
           placeholder="Password"
@@ -57,6 +81,36 @@ export default function AuthScreen({ onAuthSuccess }: AuthScreenProps) {
           onChangeText={setPassword}
           secureTextEntry
         />
+        
+        {isSignUp && (
+          <View style={styles.genderSection}>
+            <Text style={styles.genderLabel}>Gender (for health calculations)</Text>
+            <View style={styles.genderOptions}>
+              {[
+                { value: 'male', label: 'Male' },
+                { value: 'female', label: 'Female' },
+                { value: 'other', label: 'Other' },
+                { value: 'prefer_not_to_say', label: 'Prefer not to say' }
+              ].map((option) => (
+                <TouchableOpacity
+                  key={option.value}
+                  style={[
+                    styles.genderOption,
+                    gender === option.value && styles.genderOptionSelected
+                  ]}
+                  onPress={() => setGender(option.value as any)}
+                >
+                  <Text style={[
+                    styles.genderOptionText,
+                    gender === option.value && styles.genderOptionTextSelected
+                  ]}>
+                    {option.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        )}
         
         <TouchableOpacity 
           style={styles.button} 
@@ -130,5 +184,37 @@ const styles = StyleSheet.create({
   linkText: {
     color: '#3498db',
     fontSize: 14,
+  },
+  genderSection: {
+    marginVertical: 5,
+  },
+  genderLabel: {
+    fontSize: 16,
+    color: '#2c3e50',
+    marginBottom: 10,
+    fontWeight: '600',
+  },
+  genderOptions: {
+    gap: 8,
+  },
+  genderOption: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    backgroundColor: 'white',
+  },
+  genderOptionSelected: {
+    backgroundColor: '#3498db',
+    borderColor: '#3498db',
+  },
+  genderOptionText: {
+    fontSize: 16,
+    color: '#2c3e50',
+    textAlign: 'center',
+  },
+  genderOptionTextSelected: {
+    color: 'white',
+    fontWeight: 'bold',
   },
 });

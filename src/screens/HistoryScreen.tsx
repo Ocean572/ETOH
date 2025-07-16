@@ -61,11 +61,13 @@ export default function HistoryScreen() {
  };
 
  const getTimeRangeDescription = (range: TimeRange): string => {
+  const currentMonth = new Date().toLocaleDateString('en-US', { month: 'long' });
+  
   switch (range) {
    case 'week':
-    return 'Daily consumption over the past week';
+    return `Daily consumption over the past week in ${currentMonth}`;
    case 'month':
-    return 'Weekly totals over the past month';
+    return `Weekly totals for the month of ${currentMonth}`;
    case 'year':
     return 'Monthly totals over the past year';
    default:
@@ -677,10 +679,7 @@ const styles = StyleSheet.create({
    padding: 15,
    borderRadius: 12,
    alignItems: 'center',
-   shadowColor: '#000',
-   shadowOffset: { width: 0, height: 2 },
-   shadowOpacity: 0.1,
-   shadowRadius: 4,
+   boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
    elevation: 3,
  },
  statNumber: {

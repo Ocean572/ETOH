@@ -10,11 +10,15 @@ import {
 } from 'react-native';
 import { healthService, HealthAssessmentData } from '../services/healthService';
 import { calculateRiskLevel } from '../utils/healthCalculations';
+import { settingsService } from '../services/settingsService';
+import { UserProfile } from '../types';
+import CirrhosisRiskCalculator from '../components/CirrhosisRiskCalculator';
 
 const { width } = Dimensions.get('window');
 
 export default function HealthScreen() {
   const [healthData, setHealthData] = useState<HealthAssessmentData | null>(null);
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
 
@@ -25,8 +29,12 @@ export default function HealthScreen() {
   const loadHealthData = async () => {
     try {
       setLoading(true);
-      const data = await healthService.getPersonalizedHealthAssessment();
-      setHealthData(data);
+      const [healthAssessment, userProfile] = await Promise.all([
+        healthService.getPersonalizedHealthAssessment(),
+        settingsService.getProfile()
+      ]);
+      setHealthData(healthAssessment);
+      setProfile(userProfile);
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -88,6 +96,15 @@ export default function HealthScreen() {
           </View>
           <Text style={styles.riskDescription}>
             Based on your last 7 days: {healthData.weeklyTotal} drinks
+            {profile?.gender && (
+              <Text style={styles.guidelinesText}>
+                {"\n"}Using {profile.gender === 'female' ? 'female' : 'male'} health guidelines
+                {profile.gender === 'female' 
+                  ? ' (7+ drinks/week = moderate risk)' 
+                  : ' (14+ drinks/week = moderate risk)'
+                }
+              </Text>
+            )}
           </Text>
           
           {healthData.personalizedWarnings.length > 0 && (
@@ -100,6 +117,9 @@ export default function HealthScreen() {
           )}
         </View>
       )}
+
+      {/* Cirrhosis Risk Calculator */}
+      <CirrhosisRiskCalculator profile={profile} />
 
       {/* Health Education Sections */}
       <View style={styles.educationContainer}>
@@ -350,10 +370,7 @@ const styles = StyleSheet.create({
     margin: 20,
     padding: 20,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   riskHeader: {
@@ -383,6 +400,11 @@ const styles = StyleSheet.create({
     color: '#7f8c8d',
     marginBottom: 15,
   },
+  guidelinesText: {
+    fontSize: 12,
+    color: '#95a5a6',
+    fontStyle: 'italic',
+  },
   warningsContainer: {
     backgroundColor: '#fdf2e9',
     padding: 15,
@@ -409,10 +431,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'white',
     marginBottom: 15,
     borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   cardHeader: {

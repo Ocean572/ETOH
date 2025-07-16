@@ -60,13 +60,31 @@ export const calculateRiskLevel = (weeklyDrinks: number, gender: 'male' | 'femal
   }
 };
 
-export const calculateCirrhosisRisk = (weeklyDrinks: number, years: number): number => {
-  // Simplified risk calculation - in reality this would be more complex
+export const calculateCirrhosisRisk = (
+  weeklyDrinks: number, 
+  years: number, 
+  gender: 'male' | 'female' | 'other' | 'prefer_not_to_say' = 'male'
+): number => {
+  // Gender-specific risk calculation
   const baseRisk = 0.01; // 1% baseline
-  const drinkFactor = Math.max(0, weeklyDrinks - 14) * 0.002; // Risk increases after 14 drinks/week
+  
+  // Gender-specific thresholds and multipliers
+  const genderFactors = {
+    male: { threshold: 21, multiplier: 0.002 },
+    female: { threshold: 14, multiplier: 0.003 }, // Women have higher risk at lower consumption
+    other: { threshold: 17, multiplier: 0.0025 }, // Average between male/female
+    prefer_not_to_say: { threshold: 17, multiplier: 0.0025 } // Use conservative average
+  };
+  
+  const { threshold, multiplier } = genderFactors[gender];
+  
+  const drinkFactor = Math.max(0, weeklyDrinks - threshold) * multiplier;
   const timeFactor = years * 0.001; // Risk increases with time
   
-  return Math.min(0.5, baseRisk + drinkFactor + timeFactor); // Cap at 50%
+  // Women have slightly higher base risk due to biological factors
+  const genderAdjustedBaseRisk = gender === 'female' ? baseRisk * 1.2 : baseRisk;
+  
+  return Math.min(0.5, genderAdjustedBaseRisk + drinkFactor + timeFactor); // Cap at 50%
 };
 
 export const getTreatmentInfo = () => ({

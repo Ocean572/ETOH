@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import * as ImagePicker from 'expo-image-picker';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { settingsService } from '../services/settingsService';
 import { goalService } from '../services/goalService';
+import { supabase } from '../services/supabase';
 import { UserProfile, UserGoal } from '../types';
 
 export default function ProfileScreen() {
@@ -21,9 +23,12 @@ export default function ProfileScreen() {
   const [currentGoal, setCurrentGoal] = useState<UserGoal | null>(null);
   const [fullName, setFullName] = useState('');
   const [motivation, setMotivation] = useState('');
+  const [gender, setGender] = useState<'male' | 'female' | 'other' | 'prefer_not_to_say' | ''>('');
   const [isEditingName, setIsEditingName] = useState(false);
   const [isEditingMotivation, setIsEditingMotivation] = useState(false);
+  const [isEditingGender, setIsEditingGender] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
 
   useEffect(() => {
     loadData();
@@ -48,10 +53,52 @@ export default function ProfileScreen() {
       setCurrentGoal(goalData);
       setFullName(profileData?.full_name || '');
       setMotivation(profileData?.motivation_text || '');
+      setGender(profileData?.gender || '');
+      console.log('Profile loaded, profile_picture_url:', profileData?.profile_picture_url);
+      
+      // Load profile picture from storage if it exists
+      if (profileData?.profile_picture_url && !profileData.profile_picture_url.startsWith('http')) {
+        // It's a storage path, get a signed URL for our own profile picture
+        try {
+          const { data: urlData } = await supabase.storage
+            .from('profile-pictures')
+            .createSignedUrl(profileData.profile_picture_url, 3600);
+          if (urlData?.signedUrl) {
+            setProfilePictureUrl(urlData.signedUrl);
+          }
+        } catch (error) {
+          console.error('Error getting signed URL for own profile picture:', error);
+        }
+      } else if (profileData?.profile_picture_url?.startsWith('http')) {
+        // It's already a full URL
+        setProfilePictureUrl(profileData.profile_picture_url);
+      } else {
+        setProfilePictureUrl(null);
+      }
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const compressImage = async (uri: string): Promise<string> => {
+    try {
+      // Start with high quality and gradually reduce if needed
+      let quality = 0.8;
+      let compressedImage = await ImageManipulator.manipulateAsync(
+        uri,
+        [{ resize: { width: 400, height: 400 } }], // Resize to 400x400 max
+        { compress: quality, format: ImageManipulator.SaveFormat.JPEG }
+      );
+
+      // In React Native, we can't easily check file size via headers
+      // So we'll just do a reasonable compression and trust the 1MB storage limit
+      console.log(`Image compressed and resized to 400x400 with ${quality} quality`);
+      return compressedImage.uri;
+    } catch (error) {
+      console.error('Error compressing image:', error);
+      return uri; // Return original if compression fails
     }
   };
 
@@ -77,7 +124,7 @@ export default function ProfileScreen() {
       }
 
       const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'Images' as any,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -85,7 +132,16 @@ export default function ProfileScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const imageUri = result.assets[0].uri;
-        await settingsService.updateProfile({ profile_picture_url: imageUri });
+        console.log('Original camera image URI:', imageUri);
+        const compressedUri = await compressImage(imageUri);
+        console.log('Compressed camera image URI:', compressedUri);
+        
+        // Upload to Supabase storage and get the storage path
+        const storagePath = await settingsService.uploadProfilePicture(compressedUri);
+        console.log('Image uploaded to storage path:', storagePath);
+        
+        // Update profile with storage path
+        await settingsService.updateProfile({ profile_picture_url: storagePath });
         await loadData();
         Alert.alert('Success', 'Profile picture updated!');
       }
@@ -103,7 +159,7 @@ export default function ProfileScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: 'Images' as any,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
@@ -111,7 +167,16 @@ export default function ProfileScreen() {
 
       if (!result.canceled && result.assets[0]) {
         const imageUri = result.assets[0].uri;
-        await settingsService.updateProfile({ profile_picture_url: imageUri });
+        console.log('Original library image URI:', imageUri);
+        const compressedUri = await compressImage(imageUri);
+        console.log('Compressed library image URI:', compressedUri);
+        
+        // Upload to Supabase storage and get the storage path
+        const storagePath = await settingsService.uploadProfilePicture(compressedUri);
+        console.log('Image uploaded to storage path:', storagePath);
+        
+        // Update profile with storage path
+        await settingsService.updateProfile({ profile_picture_url: storagePath });
         await loadData();
         Alert.alert('Success', 'Profile picture updated!');
       }
@@ -139,6 +204,17 @@ export default function ProfileScreen() {
       await loadData();
       Keyboard.dismiss();
       Alert.alert('Success', 'Motivation updated!');
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    }
+  };
+
+  const saveGender = async () => {
+    try {
+      await settingsService.updateProfile({ gender: gender as 'male' | 'female' | 'other' | 'prefer_not_to_say' });
+      setIsEditingGender(false);
+      await loadData();
+      Alert.alert('Success', 'Gender updated!');
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
@@ -207,8 +283,17 @@ export default function ProfileScreen() {
       {/* Profile Picture */}
       <View style={styles.profileSection}>
         <TouchableOpacity style={styles.profilePictureContainer} onPress={showImagePickerOptions}>
-          {profile?.profile_picture_url ? (
-            <Image source={{ uri: profile.profile_picture_url }} style={styles.profilePicture} />
+          {profilePictureUrl ? (
+            <Image 
+              source={{ uri: profilePictureUrl }} 
+              style={styles.profilePicture}
+              onError={(error) => {
+                console.log('Profile image failed to load:', profilePictureUrl, error);
+              }}
+              onLoad={() => {
+                console.log('Profile image loaded successfully:', profilePictureUrl);
+              }}
+            />
           ) : (
             <View style={styles.profilePicturePlaceholder}>
               <Text style={styles.profilePictureText}>📷</Text>
@@ -274,6 +359,68 @@ export default function ProfileScreen() {
           <View style={styles.infoValue}>
             <Text style={styles.infoText}>{profile?.email || 'Not available'}</Text>
           </View>
+        </View>
+
+        {/* Gender */}
+        <View style={styles.infoItem}>
+          <Text style={styles.infoLabel}>Gender</Text>
+          {isEditingGender ? (
+            <View style={styles.editContainer}>
+              <View style={styles.genderOptions}>
+                {[
+                  { value: 'male', label: 'Male' },
+                  { value: 'female', label: 'Female' },
+                  { value: 'other', label: 'Other' },
+                  { value: 'prefer_not_to_say', label: 'Prefer not to say' }
+                ].map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.genderOption,
+                      gender === option.value && styles.genderOptionSelected
+                    ]}
+                    onPress={() => setGender(option.value as any)}
+                  >
+                    <Text style={[
+                      styles.genderOptionText,
+                      gender === option.value && styles.genderOptionTextSelected
+                    ]}>
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <View style={styles.editButtons}>
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={() => {
+                    setGender(profile?.gender || '');
+                    setIsEditingGender(false);
+                  }}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.saveButton}
+                  onPress={saveGender}
+                >
+                  <Text style={styles.saveButtonText}>Save</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity 
+              style={styles.infoValue}
+              onPress={() => setIsEditingGender(true)}
+            >
+              <Text style={styles.infoText}>
+                {profile?.gender ? 
+                  profile.gender.charAt(0).toUpperCase() + profile.gender.slice(1).replace('_', ' ') :
+                  'Tap to set gender'
+                }
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
 
@@ -499,6 +646,29 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   saveButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+  },
+  genderOptions: {
+    gap: 8,
+  },
+  genderOption: {
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 6,
+    backgroundColor: '#f9f9f9',
+  },
+  genderOptionSelected: {
+    backgroundColor: '#3498db',
+    borderColor: '#3498db',
+  },
+  genderOptionText: {
+    fontSize: 16,
+    color: '#2c3e50',
+    textAlign: 'center',
+  },
+  genderOptionTextSelected: {
     color: 'white',
     fontWeight: 'bold',
   },

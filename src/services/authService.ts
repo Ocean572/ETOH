@@ -1,7 +1,7 @@
 import { supabase } from './supabase';
 
 export const authService = {
-  async signUp(email: string, password: string) {
+  async signUp(email: string, password: string, fullName?: string, gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say') {
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -11,7 +11,7 @@ export const authService = {
     
     // Create profile after successful signup
     if (data.user) {
-      await this.createProfile(data.user.id, email);
+      await this.createProfile(data.user.id, email, fullName, gender);
     }
     
     return data;
@@ -44,14 +44,15 @@ export const authService = {
     }
   },
 
-  async createProfile(userId: string, email: string) {
+  async createProfile(userId: string, email: string, fullName?: string, gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say') {
     try {
       const { error } = await supabase
         .from('profiles')
         .insert({
           id: userId,
           email: email,
-          full_name: null,
+          full_name: fullName || null,
+          gender: gender,
         });
       
       if (error) {

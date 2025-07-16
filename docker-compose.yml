@@ -1,0 +1,168 @@
+services:
+  # PostgreSQL Database (for Supabase)
+  db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: your-super-secret-and-long-postgres-password
+      POSTGRES_PORT: 5432
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./database/00-setup-schemas.sql:/docker-entrypoint-initdb.d/00-setup-schemas.sql:ro
+      - ./database/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+      - ./supabase/migrations:/docker-entrypoint-initdb.d/migrations:ro
+    networks:
+      - app-network
+
+  # Supabase Auth
+  auth:
+    image: supabase/gotrue:v2.158.1
+    restart: unless-stopped
+    environment:
+      GOTRUE_API_HOST: 0.0.0.0
+      GOTRUE_API_PORT: 9999
+      GOTRUE_DB_DRIVER: postgres
+      GOTRUE_DB_DATABASE_URL: postgres://postgres:your-super-secret-and-long-postgres-password@db:5432/postgres?search_path=auth
+      API_EXTERNAL_URL: https://etoh.doctorfranz.com/supabase
+      GOTRUE_SITE_URL: https://etoh.doctorfranz.com
+      GOTRUE_URI_ALLOW_LIST: "https://etoh.doctorfranz.com,http://localhost:19006,http://localhost:3000"
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters-long
+      GOTRUE_JWT_EXP: 3600
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
+      GOTRUE_JWT_ADMIN_ROLES: service_role
+      GOTRUE_JWT_AUD: authenticated
+      GOTRUE_ENABLE_SIGNUP: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  # Supabase REST API
+  rest:
+    image: postgrest/postgrest:v12.0.1
+    restart: unless-stopped
+    environment:
+      PGRST_DB_URI: postgres://postgres:your-super-secret-and-long-postgres-password@db:5432/postgres
+      PGRST_DB_SCHEMAS: public,storage,graphql_public
+      PGRST_DB_ANON_ROLE: anon
+      PGRST_JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters-long
+      PGRST_DB_USE_LEGACY_GUCS: "false"
+      PGRST_SERVER_PORT: 3000
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  # Supabase Realtime
+  realtime:
+    image: supabase/realtime:v2.28.32
+    restart: unless-stopped
+    environment:
+      PORT: 4000
+      DB_HOST: db
+      DB_PORT: 5432
+      DB_USER: postgres
+      DB_PASSWORD: your-super-secret-and-long-postgres-password
+      DB_NAME: postgres
+      DB_AFTER_CONNECT_QUERY: 'SET search_path TO _realtime'
+      DB_ENC_KEY: supabaserealtime
+      API_JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters-long
+      FLY_ALLOC_ID: fly123
+      FLY_APP_NAME: realtime
+      SECRET_KEY_BASE: your-super-secret-and-long-secret-key-base-change-me
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  # Supabase Storage
+  storage:
+    image: supabase/storage-api:v1.0.6
+    restart: unless-stopped
+    environment:
+      ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+      POSTGREST_URL: http://rest:3000
+      PGRST_JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters-long
+      DATABASE_URL: postgres://postgres:your-super-secret-and-long-postgres-password@db:5432/postgres
+      FILE_SIZE_LIMIT: 2097152
+      STORAGE_BACKEND: file
+      FILE_STORAGE_BACKEND_PATH: /var/lib/storage
+      STORAGE_S3_REGION: us-east-1
+      TENANT_ID: stub
+      REGION: stub
+      GLOBAL_S3_BUCKET: stub
+    volumes:
+      - storage_data:/var/lib/storage
+    depends_on:
+      - db
+      - rest
+    networks:
+      - app-network
+
+  # Supabase Edge Functions
+  functions:
+    image: supabase/edge-runtime:v1.22.4
+    restart: unless-stopped
+    environment:
+      JWT_SECRET: your-super-secret-jwt-token-with-at-least-32-characters-long
+      SUPABASE_URL: http://kong:8000
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      SUPABASE_SERVICE_ROLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+      VERIFY_JWT: "false"
+    volumes:
+      - ./supabase/functions:/home/deno/functions:Z
+    depends_on:
+      - db
+    networks:
+      - app-network
+
+  # Kong API Gateway (combines all Supabase services)
+  kong:
+    image: kong:2.8-alpine
+    restart: unless-stopped
+    # No external port - access through nginx proxy
+    environment:
+      KONG_DATABASE: "off"
+      KONG_DECLARATIVE_CONFIG: /var/lib/kong/kong.yml
+      KONG_DNS_ORDER: LAST,A,CNAME
+      KONG_PLUGINS: request-transformer,cors,key-auth,acl,basic-auth
+      KONG_NGINX_PROXY_PROXY_BUFFER_SIZE: 160k
+      KONG_NGINX_PROXY_PROXY_BUFFERS: 64 160k
+      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
+      SUPABASE_SERVICE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU
+    volumes:
+      - ./supabase/config/kong.yml:/var/lib/kong/kong.yml:ro
+    depends_on:
+      - auth
+      - rest
+      - realtime
+      - storage
+      - functions
+    networks:
+      - app-network
+
+  # Expo React Native App (supports web, pwa, mobile)
+  app:
+    build: .
+    container_name: sud-etoh-app
+    restart: unless-stopped
+    ports:
+      - "19006:80"  # Map external port 19006 to internal port 80
+    depends_on:
+      - kong
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    external: true
+    name: secure-app-network
+
+volumes:
+  postgres_data:
+  storage_data:

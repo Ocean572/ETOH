@@ -1,5 +1,6 @@
 import { drinkService } from './drinkService';
 import { calculateRiskLevel, RiskLevel } from '../utils/healthCalculations';
+import { settingsService } from './settingsService';
 
 export interface HealthAssessmentData {
   weeklyTotal: number; // Total drinks in the past 7 days
@@ -20,9 +21,13 @@ export const healthService = {
     const weeklyTotal = await drinkService.getWeeklyTotal();
     const avgData = await drinkService.getAverageDrinksPerDay();
     
-    // Use actual weekly consumption for risk assessment
-    const riskAssessment = calculateRiskLevel(weeklyTotal);
-    const personalizedWarnings = this.getPersonalizedWarnings(weeklyTotal, avgData.average);
+    // Get user's gender for gender-aware risk assessment
+    const profile = await settingsService.getProfile();
+    const gender = profile?.gender === 'female' ? 'female' : 'male'; // Default to male if not specified
+    
+    // Use actual weekly consumption for risk assessment with gender
+    const riskAssessment = calculateRiskLevel(weeklyTotal, gender);
+    const personalizedWarnings = this.getPersonalizedWarnings(weeklyTotal, avgData.average, gender);
     const recommendations = this.getPersonalizedRecommendations(riskAssessment.level, weeklyTotal);
     
     return {
@@ -33,20 +38,27 @@ export const healthService = {
     };
   },
 
-  getPersonalizedWarnings(weeklyAverage: number, dailyAverage: number): string[] {
+  getPersonalizedWarnings(weeklyAverage: number, dailyAverage: number, gender: 'male' | 'female' = 'male'): string[] {
     const warnings: string[] = [];
     
-    if (weeklyAverage > 21) {
+    // Gender-specific thresholds for warnings
+    const highRiskThreshold = gender === 'female' ? 14 : 21;
+    const moderateRiskThreshold = gender === 'female' ? 7 : 14;
+    
+    if (weeklyAverage > highRiskThreshold) {
       warnings.push('Your current consumption significantly increases your risk of liver damage and cirrhosis');
-    } else if (weeklyAverage > 14) {
+    } else if (weeklyAverage > moderateRiskThreshold) {
       warnings.push('Your drinking pattern puts you at increased risk for liver problems');
     }
     
     if (dailyAverage > 3) {
-      warnings.push('Daily heavy drinking increases your cancer risk, especially for liver and breast cancer');
+      const cancerWarning = gender === 'female' 
+        ? 'Daily heavy drinking increases your cancer risk, especially for liver and breast cancer'
+        : 'Daily heavy drinking increases your cancer risk, especially for liver cancer';
+      warnings.push(cancerWarning);
     }
     
-    if (weeklyAverage > 7) {
+    if (weeklyAverage > moderateRiskThreshold) {
       warnings.push('Your consumption level may weaken your immune system');
     }
     

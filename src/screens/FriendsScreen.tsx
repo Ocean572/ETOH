@@ -27,6 +27,7 @@ export default function FriendsScreen() {
   const [selectedFriend, setSelectedFriend] = useState<Friend | null>(null);
   const [showFriendDetail, setShowFriendDetail] = useState(false);
   const [selectedFriendForDetail, setSelectedFriendForDetail] = useState<Friend | null>(null);
+  const [friendProfilePictures, setFriendProfilePictures] = useState<{[key: string]: string}>({});
 
   useEffect(() => {
     const getCurrentUser = async () => {
@@ -47,6 +48,28 @@ export default function FriendsScreen() {
       ]);
       setFriends(friendsData);
       setFriendRequests(requestsData);
+      
+      // Load profile pictures for friends
+      const picturePromises = friendsData.map(async (friend) => {
+        try {
+          const signedUrl = await friendsService.getFriendProfilePictureUrl(friend.friend_id);
+          console.log(`Profile picture for ${friend.friend_id}:`, signedUrl);
+          return { friendId: friend.friend_id, url: signedUrl };
+        } catch (error) {
+          console.log(`Error getting profile picture for ${friend.friend_id}:`, error);
+          return { friendId: friend.friend_id, url: null };
+        }
+      });
+      
+      const pictureResults = await Promise.all(picturePromises);
+      const pictureMap: {[key: string]: string} = {};
+      pictureResults.forEach(result => {
+        if (result.url) {
+          pictureMap[result.friendId] = result.url;
+        }
+      });
+      setFriendProfilePictures(pictureMap);
+      
     } catch (error: any) {
       Alert.alert('Error', error.message);
     } finally {
@@ -172,15 +195,11 @@ export default function FriendsScreen() {
           ) : (
             /* For received requests, show full profile info */
             <>
-              {profile?.profile_picture_url ? (
-                <Image source={{ uri: profile.profile_picture_url }} style={styles.profileImage} />
-              ) : (
-                <View style={styles.profilePlaceholder}>
-                  <Text style={styles.profileInitial}>
-                    {profile?.full_name?.charAt(0) || profile?.email.charAt(0).toUpperCase()}
-                  </Text>
-                </View>
-              )}
+              <View style={styles.profilePlaceholder}>
+                <Text style={styles.profileInitial}>
+                  {profile?.full_name?.charAt(0) || profile?.email.charAt(0).toUpperCase()}
+                </Text>
+              </View>
               <View style={styles.profileInfo}>
                 <Text style={styles.profileName}>
                   {profile?.full_name || profile?.email}
@@ -232,9 +251,9 @@ export default function FriendsScreen() {
         onPress={() => openFriendDetail(friend)}
       >
         <View style={styles.profileSection}>
-          {friend.friend_profile.profile_picture_url ? (
+          {friendProfilePictures[friend.friend_id] ? (
             <Image
-              source={{ uri: friend.friend_profile.profile_picture_url }}
+              source={{ uri: friendProfilePictures[friend.friend_id] }}
               style={styles.profileImage}
             />
           ) : (

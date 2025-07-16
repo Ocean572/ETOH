@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "expo-app",
-    "slug": "expo-app",
+    "name": "ETOH Tracker",
+    "slug": "etoh-tracker",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -10,20 +10,44 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#3498db"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.etohtracker.app"
     },
     "android": {
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#3498db"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.etohtracker.app"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "name": "ETOH Tracker",
+      "shortName": "ETOH",
+      "lang": "en",
+      "scope": "/",
+      "themeColor": "#4f46e5",
+      "backgroundColor": "#ffffff",
+      "display": "standalone",
+      "orientation": "portrait",
+      "startUrl": "/",
+      "preferRelatedApplications": false,
+      "bundler": "metro",
+      "template": "./web/index.html",
+      "manifest": "./public/manifest.json",
+      "serviceWorker": {
+        "src": "./public/sw.js",
+        "scope": "/"
+      }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "etoh-tracker"
+      }
     }
   }
 }

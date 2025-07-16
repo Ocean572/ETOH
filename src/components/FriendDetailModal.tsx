@@ -9,7 +9,7 @@ import {
   Image,
   Alert,
 } from 'react-native';
-import { Friend } from '../services/friendsService';
+import { Friend, friendsService } from '../services/friendsService';
 import { friendDataService, FriendProfile, FriendGoal } from '../services/friendDataService';
 import { TimeRange, ChartData } from '../services/analyticsService';
 import DrinkChart from './DrinkChart';
@@ -28,6 +28,7 @@ export default function FriendDetailModal({ visible, friend, onClose }: FriendDe
   const [timeRange, setTimeRange] = useState<TimeRange>('week');
   const [chartData, setChartData] = useState<ChartData | null>(null);
   const [chartLoading, setChartLoading] = useState(false);
+  const [friendProfilePictureUrl, setFriendProfilePictureUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (visible && friend) {
@@ -80,6 +81,16 @@ export default function FriendDetailModal({ visible, friend, onClose }: FriendDe
       setFriendProfile(enhancedProfile);
       setTodaysDrinks(drinks);
       setCurrentGoal(goal);
+      
+      // Load friend's profile picture with signed URL
+      try {
+        const signedUrl = await friendsService.getFriendProfilePictureUrl(friend.friend_id);
+        console.log(`Friend detail profile picture for ${friend.friend_id}:`, signedUrl);
+        setFriendProfilePictureUrl(signedUrl);
+      } catch (error) {
+        console.log(`Error getting friend detail profile picture for ${friend.friend_id}:`, error);
+        setFriendProfilePictureUrl(null);
+      }
     } catch (error: any) {
       console.error('Failed to load friend data:', error);
       Alert.alert('Error', `Failed to load friend data: ${error.message}`);
@@ -182,13 +193,13 @@ export default function FriendDetailModal({ visible, friend, onClose }: FriendDe
               <>
                 {/* Profile Section */}
                 <View style={styles.profileSection}>
-                  {friendProfile?.profile_picture_url && 
-                   friendProfile.profile_picture_url.startsWith('http') ? (
+                  {friendProfilePictureUrl ? (
                     <Image
-                      source={{ uri: friendProfile.profile_picture_url }}
+                      source={{ uri: friendProfilePictureUrl }}
                       style={styles.profileImage}
                       onError={() => {
                         console.log('Failed to load profile image, falling back to placeholder');
+                        setFriendProfilePictureUrl(null);
                       }}
                     />
                   ) : (

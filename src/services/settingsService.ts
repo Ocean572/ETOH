@@ -2,6 +2,49 @@ import { supabase } from './supabase';
 import { UserProfile } from '../types';
 
 export const settingsService = {
+  async uploadProfilePicture(compressedImageUri: string): Promise<string> {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User not authenticated');
+
+    try {
+      // Create a unique filename
+      const fileExt = compressedImageUri.split('.').pop() || 'jpg';
+      const fileName = `${user.id}/profile-${Date.now()}.${fileExt}`;
+      
+      // For React Native, we need to handle the file differently
+      const formData = new FormData();
+      formData.append('file', {
+        uri: compressedImageUri,
+        type: `image/${fileExt}`,
+        name: fileName.split('/').pop()
+      } as any);
+      
+      // Upload to Supabase storage using the REST API
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No session found');
+      
+      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'http://localhost:54321';
+      const response = await fetch(`${supabaseUrl}/storage/v1/object/profile-pictures/${fileName}`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+        },
+        body: formData
+      });
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('Storage upload failed:', response.status, errorText);
+        throw new Error(`Upload failed: ${response.status} ${errorText}`);
+      }
+      
+      console.log('Image uploaded to storage:', fileName);
+      return fileName;
+    } catch (error) {
+      console.error('Error uploading profile picture:', error);
+      throw error;
+    }
+  },
   async updateProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) throw new Error('User not authenticated');

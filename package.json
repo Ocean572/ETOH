@@ -3,10 +3,12 @@
   "version": "1.0.0",
   "main": "index.ts",
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start": "expo start --port 8081",
+    "android": "expo start --android --port 8081", 
+    "ios": "expo start --ios --port 8081",
+    "web": "expo start --web --port 8081",
+    "build:web": "expo export -p web",
+    "serve:web": "npx serve dist -p 3000"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
@@ -16,17 +18,21 @@
     "@react-navigation/stack": "^7.4.2",
     "@supabase/supabase-js": "^2.50.4",
     "expo": "~53.0.17",
+    "expo-image-manipulator": "^13.1.7",
     "expo-image-picker": "^16.1.4",
+    "expo-linear-gradient": "~14.1.5",
     "expo-status-bar": "~2.2.3",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.5",
     "react-native-chart-kit": "^6.12.0",
     "react-native-gesture-handler": "^2.27.1",
+    "react-native-gifted-charts": "^1.4.63",
     "react-native-safe-area-context": "^5.5.1",
     "react-native-screens": "^4.11.1",
     "react-native-svg": "^15.12.0",
-    "react-native-web": "^0.20.0"
+    "react-native-web": "^0.20.0",
+    "supabase": "^2.30.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

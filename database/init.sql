@@ -1,9 +1,19 @@
 -- ETOH Tracker Database Initialization Script
--- This script is idempotent - safe to run multiple times
--- PostgreSQL/Supabase complete database schema
+-- This script runs automatically when you start Supabase
+-- Contains everything needed for the app to work
 
 -- Enable necessary extensions
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+
+-- Create storage bucket for profile pictures first
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'profile-pictures',
+  'profile-pictures',
+  false, -- Private bucket
+  2097152, -- 2MB limit
+  array['image/jpeg', 'image/png']
+) ON CONFLICT (id) DO NOTHING;
 
 -- Users table (extends Supabase auth.users)
 CREATE TABLE IF NOT EXISTS profiles (
@@ -12,6 +22,7 @@ CREATE TABLE IF NOT EXISTS profiles (
   full_name TEXT,
   profile_picture_url TEXT,
   motivation_text TEXT,
+  gender TEXT CHECK (gender IN ('male', 'female', 'other', 'prefer_not_to_say')),
   reset_date TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
@@ -266,6 +277,42 @@ CREATE INDEX IF NOT EXISTS idx_social_contacts_user ON social_contacts(user_id, 
 -- Indexes for user_settings
 CREATE INDEX IF NOT EXISTS idx_user_settings_user ON user_settings(user_id);
 
+-- Storage policies for profile pictures
+-- Note: storage.objects RLS is enabled by default in Supabase
+-- Drop existing storage policies if they exist
+DROP POLICY IF EXISTS "Users can upload their own profile pictures" ON storage.objects;
+DROP POLICY IF EXISTS "Users can update their own profile pictures" ON storage.objects;
+DROP POLICY IF EXISTS "Users can delete their own profile pictures" ON storage.objects;
+DROP POLICY IF EXISTS "Users can read their own profile pictures" ON storage.objects;
+
+-- Policy: Users can upload their own profile pictures
+CREATE POLICY "Users can upload their own profile pictures" ON storage.objects
+FOR INSERT WITH CHECK (
+  bucket_id = 'profile-pictures' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
+
+-- Policy: Users can update their own profile pictures
+CREATE POLICY "Users can update their own profile pictures" ON storage.objects
+FOR UPDATE USING (
+  bucket_id = 'profile-pictures' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
+
+-- Policy: Users can delete their own profile pictures
+CREATE POLICY "Users can delete their own profile pictures" ON storage.objects
+FOR DELETE USING (
+  bucket_id = 'profile-pictures' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
+
+-- Policy: Users can read their own profile pictures
+CREATE POLICY "Users can read their own profile pictures" ON storage.objects
+FOR SELECT USING (
+  bucket_id = 'profile-pictures' 
+  AND auth.uid()::text = (storage.foldername(name))[1]
+);
+
 -- Real-time publication setup (for Supabase real-time features)
 -- This enables real-time subscriptions for the tables
 
@@ -275,5 +322,8 @@ ALTER PUBLICATION supabase_realtime ADD TABLE friendships;
 ALTER PUBLICATION supabase_realtime ADD TABLE drink_entries;
 
 -- Database initialization complete
--- All tables, policies, indexes, and triggers are now set up
--- The database is ready for the ETOH Tracker application
+-- All tables, policies, indexes, triggers, and storage are now set up
+-- The database is ready for the ETOH Tracker application with profile pictures
+-- 
+-- Just run: supabase start && expo start
+-- Everything is configured automatically!

@@ -171,5 +171,29 @@ export const friendsService = {
         callback
       )
       .subscribe();
+  },
+
+  async getFriendProfilePictureUrl(friendId: string): Promise<string | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('User not authenticated');
+
+    try {
+      const { data, error } = await supabase.functions.invoke('get-friend-profile-picture', {
+        body: { friend_id: friendId },
+        headers: {
+          Authorization: `Bearer ${session.access_token}`,
+        },
+      });
+
+      if (error) {
+        console.error('Error calling get-friend-profile-picture function:', error);
+        return null;
+      }
+
+      return data?.signedUrl || null;
+    } catch (error) {
+      console.error('Error getting friend profile picture URL:', error);
+      return null;
+    }
   }
 };
