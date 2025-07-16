@@ -28,7 +28,7 @@ $$;
 
 -- Grant necessary permissions
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON SCHEMA public TO supabase_admin;
+GRANT ALL ON SCHEMA public TO public TO supabase_admin;
 GRANT ALL ON ALL TABLES IN SCHEMA public TO supabase_admin;
 GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO supabase_admin;
 GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO supabase_admin;
