@@ -79,6 +79,19 @@ for i in {1..30}; do
     sleep 2
 done
 
+echo "   Checking API backend..."
+for i in {1..30}; do
+    if curl -s http://localhost:3001/health > /dev/null 2>&1; then
+        echo "   ✅ API backend is ready"
+        break
+    fi
+    if [ $i -eq 30 ]; then
+        echo "   ❌ API backend failed to start"
+        exit 1
+    fi
+    sleep 2
+done
+
 echo "   Checking app container..."
 for i in {1..30}; do
     if curl -s http://localhost:19006 > /dev/null 2>&1; then
@@ -98,6 +111,7 @@ echo "==============================================="
 echo ""
 echo "🌐 Application URLs:"
 echo "   • Main App: http://localhost:19006"
+echo "   • API Backend: http://localhost:3001"
 echo "   • Kong Gateway: http://localhost:8000"
 echo "   • Database: localhost:5432"
 echo ""

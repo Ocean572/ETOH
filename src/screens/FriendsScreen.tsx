@@ -155,7 +155,7 @@ export default function FriendsScreen() {
     if (!selectedFriend) return;
 
     try {
-      await friendsService.removeFriend(selectedFriend.id);
+      await friendsService.removeFriend(selectedFriend.friend_id);
       Alert.alert('Success', 'Friend removed');
       await loadData();
     } catch (error: any) {

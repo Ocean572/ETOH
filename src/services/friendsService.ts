@@ -1,5 +1,10 @@
 import { supabase } from './supabase';
 
+// API base URL for Node.js backend  
+const API_BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:3001/api'
+  : '/api';
+
 export interface FriendRequest {
   id: string;
   sender_id: string;
@@ -36,36 +41,42 @@ export const friendsService = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase.functions.invoke('send-friend-request', {
-      body: { email: email.trim() },
+    const response = await fetch(`${API_BASE_URL}/send-friend-request`, {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
       },
+      body: JSON.stringify({ email: email.trim() }),
     });
 
-    if (error) {
-      console.error('Error calling send-friend-request function:', error);
-      throw new Error('Failed to send friend request');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to send friend request');
     }
 
-    return data;
+    const data = await response.json();
+    return { success: true, message: data.message };
   },
 
   async getFriendRequests(): Promise<FriendRequest[]> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase.functions.invoke('get-friend-requests', {
+    const response = await fetch(`${API_BASE_URL}/get-friend-requests`, {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
       },
     });
 
-    if (error) {
-      console.error('Error calling get-friend-requests function:', error);
-      throw new Error('Failed to get friend requests');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to get friend requests');
     }
 
+    const data = await response.json();
     return data || [];
   },
 
@@ -73,20 +84,18 @@ export const friendsService = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase.functions.invoke('accept-friend-request', {
-      body: { requestId, accept },
+    const response = await fetch(`${API_BASE_URL}/accept-friend-request`, {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
       },
+      body: JSON.stringify({ requestId }),
     });
 
-    if (error) {
-      console.error('Error calling accept-friend-request function:', error);
-      throw new Error('Failed to respond to friend request');
-    }
-
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to respond to friend request');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to respond to friend request');
     }
   },
 
@@ -94,38 +103,39 @@ export const friendsService = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase.functions.invoke('get-friends', {
+    const response = await fetch(`${API_BASE_URL}/get-friends`, {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
       },
     });
 
-    if (error) {
-      console.error('Error calling get-friends function:', error);
-      throw new Error('Failed to get friends');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to get friends');
     }
 
+    const data = await response.json();
     return data || [];
   },
 
-  async removeFriend(friendshipId: string): Promise<void> {
+  async removeFriend(friendId: string): Promise<void> {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase.functions.invoke('remove-friend', {
-      body: { friendshipId },
+    const response = await fetch(`${API_BASE_URL}/remove-friend`, {
+      method: 'POST',
       headers: {
-        Authorization: `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${session.access_token}`,
       },
+      body: JSON.stringify({ friendId }),
     });
 
-    if (error) {
-      console.error('Error calling remove-friend function:', error);
-      throw new Error('Failed to remove friend');
-    }
-
-    if (!data.success) {
-      throw new Error(data.error || 'Failed to remove friend');
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to remove friend');
     }
   },
 
@@ -178,19 +188,22 @@ export const friendsService = {
     if (!session) throw new Error('User not authenticated');
 
     try {
-      const { data, error } = await supabase.functions.invoke('get-friend-profile-picture', {
-        body: { friend_id: friendId },
+      const response = await fetch(`${API_BASE_URL}/get-friend-profile-picture`, {
+        method: 'POST',
         headers: {
-          Authorization: `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${session.access_token}`,
         },
+        body: JSON.stringify({ friendId }),
       });
 
-      if (error) {
-        console.error('Error calling get-friend-profile-picture function:', error);
+      if (!response.ok) {
+        console.error('Error calling get-friend-profile-picture API');
         return null;
       }
 
-      return data?.signedUrl || null;
+      const data = await response.json();
+      return data?.profile_picture_url || null;
     } catch (error) {
       console.error('Error getting friend profile picture URL:', error);
       return null;
