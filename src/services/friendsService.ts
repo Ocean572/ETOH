@@ -1,7 +1,7 @@
-import { supabase } from './supabase';
+import { authService } from './authService';
 
 // API base URL for Node.js backend  
-const API_BASE_URL = window.location.hostname === 'localhost' 
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
   ? 'http://localhost:3001/api'
   : '/api';
 
@@ -38,14 +38,15 @@ export interface Friend {
 
 export const friendsService = {
   async sendFriendRequest(email: string): Promise<{ success: boolean; message: string }> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('User not authenticated');
+    const user = await authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
 
+    const token = localStorage.getItem('authToken');
     const response = await fetch(`${API_BASE_URL}/send-friend-request`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ email: email.trim() }),
     });
@@ -60,14 +61,15 @@ export const friendsService = {
   },
 
   async getFriendRequests(): Promise<FriendRequest[]> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('User not authenticated');
+    const user = await authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
 
+    const token = localStorage.getItem('authToken');
     const response = await fetch(`${API_BASE_URL}/get-friend-requests`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
+        'Authorization': `Bearer ${token}`,
       },
     });
 
@@ -81,14 +83,15 @@ export const friendsService = {
   },
 
   async respondToFriendRequest(requestId: string, accept: boolean): Promise<void> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('User not authenticated');
+    const user = await authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
 
+    const token = localStorage.getItem('authToken');
     const response = await fetch(`${API_BASE_URL}/accept-friend-request`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ requestId }),
     });
@@ -100,14 +103,15 @@ export const friendsService = {
   },
 
   async getFriends(): Promise<Friend[]> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('User not authenticated');
+    const user = await authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
 
+    const token = localStorage.getItem('authToken');
     const response = await fetch(`${API_BASE_URL}/get-friends`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
+        'Authorization': `Bearer ${token}`,
       },
     });
 
@@ -121,14 +125,15 @@ export const friendsService = {
   },
 
   async removeFriend(friendId: string): Promise<void> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('User not authenticated');
+    const user = await authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
 
+    const token = localStorage.getItem('authToken');
     const response = await fetch(`${API_BASE_URL}/remove-friend`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${session.access_token}`,
+        'Authorization': `Bearer ${token}`,
       },
       body: JSON.stringify({ friendId }),
     });
@@ -139,60 +144,29 @@ export const friendsService = {
     }
   },
 
-  // Real-time subscription for friend requests
+  // Real-time subscription for friend requests (websockets removed for now)
   subscribeFriendRequests(userId: string, callback: (payload: any) => void) {
-    return supabase
-      .channel('friend-requests')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'friend_requests',
-          filter: `receiver_id=eq.${userId}`
-        },
-        callback
-      )
-      .subscribe();
+    console.log('Real-time subscriptions not implemented for Node.js backend');
+    return { unsubscribe: () => {} };
   },
 
-  // Real-time subscription for friendships
+  // Real-time subscription for friendships (websockets removed for now)
   subscribeFriendships(userId: string, callback: (payload: any) => void) {
-    return supabase
-      .channel('friendships')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'friendships',
-          filter: `user_id=eq.${userId}`
-        },
-        callback
-      )
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'friendships',
-          filter: `friend_id=eq.${userId}`
-        },
-        callback
-      )
-      .subscribe();
+    console.log('Real-time subscriptions not implemented for Node.js backend');
+    return { unsubscribe: () => {} };
   },
 
   async getFriendProfilePictureUrl(friendId: string): Promise<string | null> {
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) throw new Error('User not authenticated');
+    const user = await authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
 
     try {
+      const token = localStorage.getItem('authToken');
       const response = await fetch(`${API_BASE_URL}/get-friend-profile-picture`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: JSON.stringify({ friendId }),
       });

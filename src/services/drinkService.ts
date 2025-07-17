@@ -1,47 +1,59 @@
-import { supabase } from './supabase';
+import { authService } from './authService';
 import { DrinkEntry } from '../types';
+
+// API base URL configuration
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+  ? 'http://localhost:3001/api'
+  : '/api';
 
 export const drinkService = {
   async addDrinkEntry(drinkCount: number, drinkType?: string, notes?: string): Promise<DrinkEntry | null> {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError) throw new Error('Authentication error: ' + authError.message);
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase
-      .from('drink_entries')
-      .insert({
-        user_id: user.id,
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/drinks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
         drink_count: drinkCount,
         drink_type: drinkType,
         notes: notes,
-      })
-      .select()
-      .single();
+      }),
+    });
 
-    if (error) throw error;
-    return data;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to add drink entry');
+    }
+
+    return await response.json();
   },
 
   async getDrinkEntries(startDate?: string, endDate?: string): Promise<DrinkEntry[]> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    let query = supabase
-      .from('drink_entries')
-      .select('*')
-      .eq('user_id', user.id)
-      .order('logged_at', { ascending: false });
+    const token = localStorage.getItem('authToken');
+    const params = new URLSearchParams();
+    if (startDate) params.append('startDate', startDate);
+    if (endDate) params.append('endDate', endDate);
 
-    if (startDate) {
-      query = query.gte('logged_at', startDate);
-    }
-    if (endDate) {
-      query = query.lte('logged_at', endDate);
+    const response = await fetch(`${API_BASE_URL}/drinks?${params}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to get drink entries');
     }
 
-    const { data, error } = await query;
-    if (error) throw error;
-    return data || [];
+    return await response.json();
   },
 
   async getTodaysDrinks(): Promise<DrinkEntry[]> {
@@ -67,123 +79,107 @@ export const drinkService = {
   },
 
   async deleteDrinkEntry(id: string): Promise<void> {
-    const { error } = await supabase
-      .from('drink_entries')
-      .delete()
-      .eq('id', id);
+    const user = await authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
 
-    if (error) throw error;
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/drinks/${id}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to delete drink entry');
+    }
   },
 
   async updateDrinkEntry(id: string, updates: { drink_count?: number; logged_at?: string }): Promise<DrinkEntry> {
-    const { data, error } = await supabase
-      .from('drink_entries')
-      .update(updates)
-      .eq('id', id)
-      .select()
-      .single();
+    const user = await authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
 
-    if (error) throw error;
-    return data;
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/drinks/${id}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(updates),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update drink entry');
+    }
+
+    return await response.json();
   },
 
   async getDrinksForDate(date: string): Promise<DrinkEntry[]> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const startOfDay = `${date}T00:00:00.000Z`;
-    const endOfDay = `${date}T23:59:59.999Z`;
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/drinks/date/${date}`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
 
-    const { data, error } = await supabase
-      .from('drink_entries')
-      .select('*')
-      .eq('user_id', user.id)
-      .gte('logged_at', startOfDay)
-      .lte('logged_at', endOfDay)
-      .order('logged_at', { ascending: false });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to get drinks for date');
+    }
 
-    if (error) throw error;
-    return data || [];
+    return await response.json();
   },
 
   async addDrinkEntryForDate(drinkCount: number, date: string, time: string = '12:00'): Promise<DrinkEntry | null> {
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError) throw new Error('Authentication error: ' + authError.message);
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
     const dateTime = `${date}T${time}:00.000Z`;
 
-    const { data, error } = await supabase
-      .from('drink_entries')
-      .insert({
-        user_id: user.id,
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/drinks`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
         drink_count: drinkCount,
         logged_at: dateTime,
-      })
-      .select()
-      .single();
+      }),
+    });
 
-    if (error) throw error;
-    return data;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to add drink entry');
+    }
+
+    return await response.json();
   },
 
   async getAverageDrinksPerDay(): Promise<{ average: number; daysSinceJoined: number }> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    // Get user's profile to find when they joined and last reset date
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('created_at, reset_date')
-      .eq('id', user.id)
-      .single();
-
-    if (profileError) throw profileError;
-    if (!profile) throw new Error('Profile not found');
-
-    // Use reset date if available, otherwise use profile creation date
-    const resetDate = profile.reset_date ? new Date(profile.reset_date).getTime() : new Date(profile.created_at).getTime();
-    
-    // Get the earliest drink entry date after reset
-    const { data: firstEntry, error: firstEntryError } = await supabase
-      .from('drink_entries')
-      .select('logged_at')
-      .eq('user_id', user.id)
-      .gte('logged_at', new Date(resetDate).toISOString())
-      .order('logged_at', { ascending: true })
-      .limit(1)
-      .single();
-
-    // Use the later of reset date or first drink entry after reset
-    const firstEntryDate = firstEntry ? new Date(firstEntry.logged_at).getTime() : resetDate;
-    const startDate = new Date(Math.max(resetDate, firstEntryDate)).toISOString().split('T')[0];
-    const endDate = new Date().toISOString().split('T')[0];
-
-    // Calculate days since reset/joining
-    const daysSinceJoined = Math.ceil((Date.now() - new Date(startDate).getTime()) / (24 * 60 * 60 * 1000));
-
-    // Get all drink entries since reset
-    const { data, error } = await supabase
-      .from('drink_entries')
-      .select('drink_count, logged_at')
-      .eq('user_id', user.id)
-      .gte('logged_at', startDate)
-      .lte('logged_at', endDate + 'T23:59:59');
-
-    if (error) throw error;
-    if (!data || data.length === 0) return { average: 0, daysSinceJoined };
-
-    // Group by date and sum drinks per day
-    const dailyTotals: { [date: string]: number } = {};
-    data.forEach(entry => {
-      const date = entry.logged_at.split('T')[0];
-      dailyTotals[date] = (dailyTotals[date] || 0) + entry.drink_count;
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/drinks/average`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
     });
 
-    // Calculate average including days with 0 drinks since reset
-    const totalDrinks = Object.values(dailyTotals).reduce((sum, drinks) => sum + drinks, 0);
-    const average = Math.round((totalDrinks / daysSinceJoined) * 10) / 10;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to get average drinks per day');
+    }
 
-    return { average, daysSinceJoined };
+    return await response.json();
   },
 };

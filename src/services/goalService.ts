@@ -1,81 +1,101 @@
-import { supabase } from './supabase';
+import { authService } from './authService';
 import { UserGoal } from '../types';
+
+// API base URL configuration
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+  ? 'http://localhost:3001/api'
+  : '/api';
 
 export const goalService = {
   async getCurrentGoal(): Promise<UserGoal | null> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase
-      .from('user_goals')
-      .select('*')
-      .eq('user_id', user.id)
-      .eq('is_active', true)
-      .eq('goal_type', 'daily')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/goals/current`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 is "no rows returned"
-      throw error;
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to get current goal');
     }
 
-    return data || null;
+    return await response.json();
   },
 
   async setDailyGoal(targetDrinks: number): Promise<UserGoal> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    // Deactivate any existing daily goals
-    await supabase
-      .from('user_goals')
-      .update({ is_active: false })
-      .eq('user_id', user.id)
-      .eq('goal_type', 'daily');
-
-    // Create new persistent daily goal (no end date = ongoing)
-    const { data, error } = await supabase
-      .from('user_goals')
-      .insert({
-        user_id: user.id,
-        goal_type: 'daily',
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/goals/daily`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({
         target_drinks: targetDrinks,
-        start_date: new Date().toISOString().split('T')[0],
-        end_date: null, // No end date - persistent goal
-        is_active: true,
-      })
-      .select()
-      .single();
+      }),
+    });
 
-    if (error) throw error;
-    return data;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to set daily goal');
+    }
+
+    return await response.json();
   },
 
   async updateDailyGoal(targetDrinks: number): Promise<UserGoal> {
     const currentGoal = await this.getCurrentGoal();
     
     if (currentGoal) {
-      const { data, error } = await supabase
-        .from('user_goals')
-        .update({ target_drinks: targetDrinks })
-        .eq('id', currentGoal.id)
-        .select()
-        .single();
+      const user = await authService.getCurrentUser();
+      if (!user) throw new Error('User not authenticated');
 
-      if (error) throw error;
-      return data;
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE_URL}/goals/${currentGoal.id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          target_drinks: targetDrinks,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to update daily goal');
+      }
+
+      return await response.json();
     } else {
       return this.setDailyGoal(targetDrinks);
     }
   },
 
   async deleteGoal(goalId: string): Promise<void> {
-    const { error } = await supabase
-      .from('user_goals')
-      .delete()
-      .eq('id', goalId);
+    const user = await authService.getCurrentUser();
+    if (!user) throw new Error('User not authenticated');
 
-    if (error) throw error;
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/goals/${goalId}`, {
+      method: 'DELETE',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to delete goal');
+    }
   },
 };

@@ -11,7 +11,7 @@ import {
   RefreshControl,
 } from 'react-native';
 import { friendsService, FriendRequest, Friend } from '../services/friendsService';
-import { supabase } from '../services/supabase';
+import { authService } from '../services/authService';
 import ConfirmationPopup from '../components/ConfirmationPopup';
 import FriendDetailModal from '../components/FriendDetailModal';
 
@@ -31,7 +31,7 @@ export default function FriendsScreen() {
 
   useEffect(() => {
     const getCurrentUser = async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await authService.getCurrentUser();
       setCurrentUser(user);
     };
     getCurrentUser();
@@ -84,7 +84,7 @@ export default function FriendsScreen() {
   };
 
   const setupRealTimeSubscriptions = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) return;
 
     // Subscribe to friend requests

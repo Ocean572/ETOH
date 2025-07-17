@@ -6,8 +6,8 @@ import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { View, Text, TouchableOpacity, Alert, StyleSheet, Platform } from 'react-native';
 
-import { supabase } from './src/services/supabase';
-import { settingsService } from './src/services/settingsService';
+import { authService } from './src/services/authService';
+import { authStateManager } from './src/services/authStateManager';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import HistoryScreenComponent from './src/screens/HistoryScreen';
@@ -67,8 +67,10 @@ function ProfileButton({ navigation }: { navigation: any }) {
 
   const handleLogout = async () => {
     try {
-      await settingsService.signOut();
+      await authService.signOut();
       setShowDropdown(false);
+      // Notify all listeners that auth state changed
+      authStateManager.notifyAuthChanged();
     } catch (error: any) {
       Alert.alert('Error', error.message);
     }
@@ -256,26 +258,19 @@ export default function App() {
   useEffect(() => {
     checkAuthStatus();
     
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        console.log('Auth state changed:', event, !!session);
-        setIsAuthenticated(!!session);
-        setIsLoading(false);
-      }
-    );
-
-    return () => subscription.unsubscribe();
+    // Listen for auth changes from logout buttons
+    const handleAuthChange = () => {
+      checkAuthStatus();
+    };
+    
+    authStateManager.addListener(handleAuthChange);
+    return () => authStateManager.removeListener(handleAuthChange);
   }, []);
 
   const checkAuthStatus = async () => {
     try {
-      const { data: { session }, error } = await supabase.auth.getSession();
-      if (error) {
-        console.error('Auth session error:', error);
-        setIsAuthenticated(false);
-      } else {
-        setIsAuthenticated(!!session);
-      }
+      const user = await authService.getCurrentUser();
+      setIsAuthenticated(!!user);
     } catch (error) {
       console.error('Error checking auth status:', error);
       setIsAuthenticated(false);

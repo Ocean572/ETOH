@@ -1,17 +1,32 @@
-import { supabase } from './supabase';
+// API base URL configuration
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+  ? 'http://localhost:3001/api'
+  : '/api';
 
 export const authService = {
   async signUp(email: string, password: string, fullName?: string, gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say') {
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
+    const response = await fetch(`${API_BASE_URL}/auth/register`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email,
+        password,
+        full_name: fullName,
+        gender,
+      }),
     });
+
+    const data = await response.json();
     
-    if (error) throw error;
+    if (!response.ok) {
+      throw new Error(data.error || 'Registration failed');
+    }
     
-    // Create profile after successful signup
-    if (data.user) {
-      await this.createProfile(data.user.id, email, fullName, gender);
+    // Store token in localStorage
+    if (data.token) {
+      localStorage.setItem('authToken', data.token);
     }
     
     return data;
@@ -19,22 +34,26 @@ export const authService = {
 
   async signIn(email: string, password: string) {
     try {
-      const { data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
+      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email,
+          password,
+        }),
       });
+
+      const data = await response.json();
       
-      if (error) {
-        // Provide more helpful error messages
-        if (error.message.includes('Invalid login credentials') || error.message.includes('Invalid')) {
-          throw new Error('Account not found. The database was recently reset - please create a new account by signing up.');
-        }
-        throw error;
+      if (!response.ok) {
+        throw new Error(data.error || 'Login failed');
       }
       
-      // Ensure profile exists for existing users
-      if (data.user) {
-        await this.ensureProfile(data.user.id, data.user.email || email);
+      // Store token in localStorage
+      if (data.token) {
+        localStorage.setItem('authToken', data.token);
       }
       
       return data;
@@ -44,46 +63,34 @@ export const authService = {
     }
   },
 
-  async createProfile(userId: string, email: string, fullName?: string, gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say') {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .insert({
-          id: userId,
-          email: email,
-          full_name: fullName || null,
-          gender: gender,
-        });
-      
-      if (error) {
-        console.error('Error creating profile:', error);
-        // Don't throw here as the user is already created in auth
-      }
-    } catch (error) {
-      console.error('Error creating profile:', error);
+  async getCurrentUser() {
+    const token = localStorage.getItem('authToken');
+    if (!token) {
+      return null;
     }
-  },
 
-  async ensureProfile(userId: string, email: string) {
     try {
-      // Check if profile exists
-      const { data: existingProfile, error: selectError } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('id', userId)
-        .single();
-      
-      // Create profile if it doesn't exist (ignore PGRST116 error which means no rows found)
-      if (!existingProfile && selectError?.code === 'PGRST116') {
-        await this.createProfile(userId, email);
+      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        // Token is invalid, remove it
+        localStorage.removeItem('authToken');
+        return null;
       }
+
+      return await response.json();
     } catch (error) {
-      console.error('Error ensuring profile:', error);
+      console.error('Error getting current user:', error);
+      localStorage.removeItem('authToken');
+      return null;
     }
   },
 
   async signOut() {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    localStorage.removeItem('authToken');
   },
 };

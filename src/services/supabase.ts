@@ -1,12 +1,29 @@
-import { createClient } from '@supabase/supabase-js';
+// Temporary stub for supabase - to be removed
+// This file exists only to prevent build errors during transition
 
-// For development, use these values. In production, use environment variables
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 
-  (typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-    ? 'http://localhost:54321' 
-    : 'https://etoh.doctorfranz.com/supabase');
-const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJyb2xlIjoiYW5vbiJ9.54r4pUk2bJjai00rlsBmyrS2A4yB5BI0kTpTj29_3gA';
-
-export const supabase = createClient(supabaseUrl, supabaseKey);
+export const supabase = {
+  auth: {
+    getUser: () => Promise.resolve({ data: { user: null } }),
+    onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
+  },
+  storage: {
+    from: () => ({
+      getPublicUrl: () => ({ data: { publicUrl: '' } }),
+    }),
+  },
+  from: () => ({
+    select: () => ({
+      eq: () => ({
+        single: () => Promise.resolve({ data: null, error: null }),
+      }),
+    }),
+    insert: () => Promise.resolve({ data: null, error: null }),
+    update: () => Promise.resolve({ data: null, error: null }),
+    delete: () => Promise.resolve({ data: null, error: null }),
+  }),
+  channel: () => ({
+    on: () => ({ subscribe: () => {} }),
+  }),
+};
 
 export default supabase;

@@ -15,7 +15,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { settingsService } from '../services/settingsService';
 import { goalService } from '../services/goalService';
-import { supabase } from '../services/supabase';
+import { authStateManager } from '../services/authStateManager';
 import { UserProfile, UserGoal } from '../types';
 
 export default function ProfileScreen() {
@@ -56,21 +56,8 @@ export default function ProfileScreen() {
       setGender(profileData?.gender || '');
       console.log('Profile loaded, profile_picture_url:', profileData?.profile_picture_url);
       
-      // Load profile picture from storage if it exists
-      if (profileData?.profile_picture_url && !profileData.profile_picture_url.startsWith('http')) {
-        // It's a storage path, get a signed URL for our own profile picture
-        try {
-          const { data: urlData } = await supabase.storage
-            .from('profile-pictures')
-            .createSignedUrl(profileData.profile_picture_url, 3600);
-          if (urlData?.signedUrl) {
-            setProfilePictureUrl(urlData.signedUrl);
-          }
-        } catch (error) {
-          console.error('Error getting signed URL for own profile picture:', error);
-        }
-      } else if (profileData?.profile_picture_url?.startsWith('http')) {
-        // It's already a full URL
+      // Set profile picture URL directly from backend
+      if (profileData?.profile_picture_url) {
         setProfilePictureUrl(profileData.profile_picture_url);
       } else {
         setProfilePictureUrl(null);
@@ -255,7 +242,8 @@ export default function ProfileScreen() {
           onPress: async () => {
             try {
               await settingsService.signOut();
-              // The auth state change will be handled by the App component's listener
+              // Notify all listeners that auth state changed
+              authStateManager.notifyAuthChanged();
             } catch (error: any) {
               Alert.alert('Error', error.message);
             }

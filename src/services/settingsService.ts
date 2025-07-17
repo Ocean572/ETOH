@@ -1,9 +1,14 @@
-import { supabase } from './supabase';
+import { authService } from './authService';
 import { UserProfile } from '../types';
+
+// API base URL configuration
+const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
+  ? 'http://localhost:3001/api'
+  : '/api';
 
 export const settingsService = {
   async uploadProfilePicture(compressedImageUri: string): Promise<string> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
     try {
@@ -19,121 +24,111 @@ export const settingsService = {
         name: fileName.split('/').pop()
       } as any);
       
-      // Upload to Supabase storage using the REST API
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) throw new Error('No session found');
-      
-      const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'http://localhost:54321';
-      const response = await fetch(`${supabaseUrl}/storage/v1/object/profile-pictures/${fileName}`, {
+      // Upload to Node.js backend
+      const token = localStorage.getItem('authToken');
+      const response = await fetch(`${API_BASE_URL}/upload/profile-picture`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${session.access_token}`,
+          'Authorization': `Bearer ${token}`,
         },
         body: formData
       });
       
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Storage upload failed:', response.status, errorText);
+        console.error('Upload failed:', response.status, errorText);
         throw new Error(`Upload failed: ${response.status} ${errorText}`);
       }
       
-      console.log('Image uploaded to storage:', fileName);
-      return fileName;
+      const data = await response.json();
+      console.log('Image uploaded:', data.fileName);
+      return data.fileName;
     } catch (error) {
       console.error('Error uploading profile picture:', error);
       throw error;
     }
   },
   async updateProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .update(updates)
-      .eq('id', user.id)
-      .select()
-      .single();
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/profile`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify(updates),
+    });
 
-    if (error) throw error;
-    return data;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Update failed');
+    }
+
+    return await response.json();
   },
 
   async getProfile(): Promise<UserProfile | null> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', user.id)
-      .single();
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/profile`, {
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
 
-    if (error && error.code !== 'PGRST116') throw error;
-    return data || null;
+    if (!response.ok) {
+      if (response.status === 404) return null;
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to get profile');
+    }
+
+    return await response.json();
   },
 
   async updateMotivation(motivation: string): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const { error } = await supabase
-      .from('profiles')
-      .update({ motivation_text: motivation })
-      .eq('id', user.id);
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/profile/motivation`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`,
+      },
+      body: JSON.stringify({ motivation_text: motivation }),
+    });
 
-    if (error) throw error;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to update motivation');
+    }
   },
 
   async resetApplication(): Promise<void> {
-    const { data: { user } } = await supabase.auth.getUser();
+    const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    // Start a transaction-like approach
-    // 1. Update profile reset date to current time
-    const { error: profileError } = await supabase
-      .from('profiles')
-      .update({ reset_date: new Date().toISOString() })
-      .eq('id', user.id);
+    const token = localStorage.getItem('authToken');
+    const response = await fetch(`${API_BASE_URL}/profile/reset`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
 
-    if (profileError) throw profileError;
-
-    // 2. Delete all drink entries
-    const { error: drinkError } = await supabase
-      .from('drink_entries')
-      .delete()
-      .eq('user_id', user.id);
-
-    if (drinkError) throw drinkError;
-
-    // 3. Delete all goals
-    const { error: goalsError } = await supabase
-      .from('user_goals')
-      .delete()
-      .eq('user_id', user.id);
-
-    if (goalsError) throw goalsError;
-
-    // 4. Delete all health assessments
-    const { error: healthError } = await supabase
-      .from('health_assessments')
-      .delete()
-      .eq('user_id', user.id);
-
-    if (healthError) throw healthError;
-
-    // 5. Delete all user settings
-    const { error: settingsError } = await supabase
-      .from('user_settings')
-      .delete()
-      .eq('user_id', user.id);
-
-    if (settingsError) throw settingsError;
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.error || 'Failed to reset application');
+    }
   },
 
   async signOut(): Promise<void> {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    await authService.signOut();
   },
 };

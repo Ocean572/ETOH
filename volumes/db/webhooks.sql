@@ -1,2 +1,0 @@
--- Webhooks setup (placeholder)
--- Add webhook configurations here if needed
