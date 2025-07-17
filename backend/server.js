@@ -17,7 +17,22 @@ app.use(cors({
 
 app.use(express.json());
 
-// Initialize Supabase admin client
+// Helper function to create Supabase client with user's token
+const createUserSupabaseClient = (authToken) => {
+  return createClient(
+    process.env.SUPABASE_URL,
+    process.env.SUPABASE_ANON_KEY,
+    {
+      global: {
+        headers: {
+          Authorization: authToken
+        }
+      }
+    }
+  );
+};
+
+// Admin Supabase client for service operations
 const supabaseAdmin = createClient(
   process.env.SUPABASE_URL,
   process.env.SUPABASE_SERVICE_KEY
@@ -55,15 +70,43 @@ app.post('/api/get-friends', authenticateUser, async (req, res) => {
   try {
     console.log('Getting friends for user:', req.user.id);
 
-    // Get friendships using admin client (bypasses RLS)
-    const { data: friendships, error } = await supabaseAdmin
+    // Create Supabase client with user's auth token
+    const supabase = createUserSupabaseClient(req.headers.authorization);
+    
+    // Get friendships using user's token (respects RLS)
+    console.log('Making Supabase call for friendships...');
+    console.log('Supabase URL:', process.env.SUPABASE_URL);
+    console.log('Auth header:', req.headers.authorization ? 'Present' : 'Missing');
+    console.log('Auth token preview:', req.headers.authorization ? req.headers.authorization.substring(0, 50) + '...' : 'None');
+    
+    // Debug the token format
+    const token = req.headers.authorization?.replace('Bearer ', '');
+    console.log('Token length:', token?.length);
+    console.log('Token parts:', token?.split('.').length);
+    
+    // Generate a new anon key with current JWT_SECRET for testing
+    const newAnonKey = jwt.sign({ role: 'anon' }, process.env.JWT_SECRET);
+    console.log('Generated anon key:', newAnonKey);
+    console.log('Current anon key:', process.env.SUPABASE_ANON_KEY);
+    
+    // Test with the newly generated anon key
+    const newClient = createClient(process.env.SUPABASE_URL, newAnonKey);
+    const newResult = await newClient.from('friendships').select('*');
+    console.log('New anon key result:', JSON.stringify(newResult, null, 2));
+    
+    const result = await supabase
       .from('friendships')
       .select('id, user_id, friend_id, created_at')
       .eq('user_id', req.user.id)
       .order('created_at', { ascending: false });
 
+    console.log('Filtered result:', JSON.stringify(result, null, 2));
+    
+    const { data: friendships, error } = result;
+
     if (error) {
-      console.error('Error fetching friendships:', error);
+      console.error('Error fetching friendships:', JSON.stringify(error, null, 2));
+      console.error('Full error object:', error);
       return res.status(500).json({ error: 'Failed to fetch friends' });
     }
 
@@ -71,9 +114,9 @@ app.post('/api/get-friends', authenticateUser, async (req, res) => {
       return res.json([]);
     }
 
-    // Get friend profiles using admin client
+    // Get friend profiles using user's token
     const friendIds = friendships.map(f => f.friend_id);
-    const { data: profiles, error: profileError } = await supabaseAdmin
+    const { data: profiles, error: profileError } = await supabase
       .from('profiles')
       .select('id, full_name, email, profile_picture_url')
       .in('id', friendIds);
@@ -103,8 +146,11 @@ app.post('/api/get-friend-requests', authenticateUser, async (req, res) => {
   try {
     console.log('Getting friend requests for user:', req.user.id);
 
+    // Create Supabase client with user's auth token
+    const supabase = createUserSupabaseClient(req.headers.authorization);
+
     // Get pending friend requests where the current user is the receiver
-    const { data: requests, error } = await supabaseAdmin
+    const { data: requests, error } = await supabase
       .from('friend_requests')
       .select('id, sender_id, receiver_id, status, created_at')
       .eq('receiver_id', req.user.id)
@@ -112,7 +158,8 @@ app.post('/api/get-friend-requests', authenticateUser, async (req, res) => {
       .order('created_at', { ascending: false });
 
     if (error) {
-      console.error('Error fetching friend requests:', error);
+      console.error('Error fetching friend requests:', JSON.stringify(error, null, 2));
+      console.error('Full error object:', error);
       return res.status(500).json({ error: 'Failed to fetch friend requests' });
     }
 
@@ -122,7 +169,7 @@ app.post('/api/get-friend-requests', authenticateUser, async (req, res) => {
 
     // Get sender profiles
     const senderIds = requests.map(r => r.sender_id);
-    const { data: profiles, error: profileError } = await supabaseAdmin
+    const { data: profiles, error: profileError } = await supabase
       .from('profiles')
       .select('id, full_name, email, profile_picture_url')
       .in('id', senderIds);
