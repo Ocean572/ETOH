@@ -1,5 +1,8 @@
-# Production build for Expo web app
-FROM node:18-alpine as builder
+# Multi-stage build for production
+FROM node:18-alpine AS builder
+
+# Install Expo CLI
+RUN npm install -g @expo/cli
 
 # Set working directory
 WORKDIR /app
@@ -14,25 +17,22 @@ RUN npm ci --only=production
 COPY . .
 
 # Build the web app for production
-RUN npx expo export -p web
+RUN npx expo export -p web --output-dir dist
 
-# Production stage with nginx
+# Production stage
 FROM nginx:alpine
 
-# Copy built app to nginx
+# Copy built app from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
+
+# Copy nginx configuration
+COPY nginx.conf /etc/nginx/conf.d/default.conf
 
 # Copy PWA files
 COPY public/manifest.json /usr/share/nginx/html/manifest.json
 COPY public/sw.js /usr/share/nginx/html/sw.js
 
-# Copy nginx configuration
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-
-# Create directories for PWA
-RUN mkdir -p /usr/share/nginx/html/.well-known
-
-# Expose port
+# Expose port 80
 EXPOSE 80
 
 # Start nginx

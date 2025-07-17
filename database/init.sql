@@ -321,9 +321,136 @@ ALTER PUBLICATION supabase_realtime ADD TABLE friend_requests;
 ALTER PUBLICATION supabase_realtime ADD TABLE friendships;
 ALTER PUBLICATION supabase_realtime ADD TABLE drink_entries;
 
+-- CRITICAL: Grant proper permissions to database roles
+-- This is essential for PostgREST to work properly
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO anon;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO authenticated;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO anon;
+GRANT USAGE ON ALL SEQUENCES IN SCHEMA public TO authenticated;
+
+-- Update RLS policies to work with self-hosted Supabase JWT claims
+-- The original auth.uid() doesn't work reliably in self-hosted setups
+-- So we use JWT claims directly
+
+-- Drop existing policies that use auth.uid() and recreate with JWT claims
+DROP POLICY IF EXISTS "Users can view own drink entries" ON drink_entries;
+DROP POLICY IF EXISTS "Users can insert own drink entries" ON drink_entries;
+DROP POLICY IF EXISTS "Users can update own drink entries" ON drink_entries;
+DROP POLICY IF EXISTS "Users can delete own drink entries" ON drink_entries;
+
+-- Create new policies using JWT claims for drink_entries
+CREATE POLICY "Users can view own drink entries" ON drink_entries FOR SELECT 
+USING (
+  user_id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+CREATE POLICY "Users can insert own drink entries" ON drink_entries FOR INSERT 
+WITH CHECK (
+  user_id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+CREATE POLICY "Users can update own drink entries" ON drink_entries FOR UPDATE 
+USING (
+  user_id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+CREATE POLICY "Users can delete own drink entries" ON drink_entries FOR DELETE 
+USING (
+  user_id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+-- Update profiles policies to use JWT claims
+DROP POLICY IF EXISTS "Users can view own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON profiles;
+
+CREATE POLICY "Users can view own profile" ON profiles FOR SELECT 
+USING (
+  id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+CREATE POLICY "Users can update own profile" ON profiles FOR UPDATE 
+USING (
+  id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+CREATE POLICY "Users can insert own profile" ON profiles FOR INSERT 
+WITH CHECK (
+  id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+-- Update other table policies to use JWT claims
+DROP POLICY IF EXISTS "Users can view own goals" ON user_goals;
+DROP POLICY IF EXISTS "Users can insert own goals" ON user_goals;
+DROP POLICY IF EXISTS "Users can update own goals" ON user_goals;
+DROP POLICY IF EXISTS "Users can delete own goals" ON user_goals;
+
+CREATE POLICY "Users can view own goals" ON user_goals FOR SELECT 
+USING (
+  user_id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+CREATE POLICY "Users can insert own goals" ON user_goals FOR INSERT 
+WITH CHECK (
+  user_id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+CREATE POLICY "Users can update own goals" ON user_goals FOR UPDATE 
+USING (
+  user_id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+CREATE POLICY "Users can delete own goals" ON user_goals FOR DELETE 
+USING (
+  user_id = COALESCE(
+    (current_setting('request.jwt.claim.sub', true))::uuid,
+    (current_setting('request.jwt.claims', true)::jsonb ->> 'sub')::uuid
+  )
+);
+
+-- Add performance indexes for RLS
+CREATE INDEX IF NOT EXISTS idx_drink_entries_user_id_rls ON drink_entries USING btree (user_id);
+CREATE INDEX IF NOT EXISTS idx_profiles_id_rls ON profiles USING btree (id);
+CREATE INDEX IF NOT EXISTS idx_user_goals_user_id_rls ON user_goals USING btree (user_id);
+
 -- Database initialization complete
 -- All tables, policies, indexes, triggers, and storage are now set up
 -- The database is ready for the ETOH Tracker application with profile pictures
 -- 
--- Just run: supabase start && expo start
+-- IMPORTANT: This script includes all manual fixes for self-hosted Supabase:
+-- 1. Proper database role permissions for anon/authenticated users
+-- 2. JWT-based RLS policies that work with self-hosted Supabase
+-- 3. Performance indexes for RLS queries
+-- 
+-- Just run: docker compose up --build -d
 -- Everything is configured automatically!
