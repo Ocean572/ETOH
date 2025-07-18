@@ -1227,7 +1227,13 @@ app.get('/api/friends/:friendId/drinks/chart', authenticateToken, async (req, re
 
 app.post('/api/upload/profile-picture', authenticateToken, upload.single('file'), async (req, res) => {
   try {
+    console.log('DEBUG: Profile picture upload request received');
+    console.log('DEBUG: User ID:', req.user.userId);
+    console.log('DEBUG: Request headers:', req.headers);
+    console.log('DEBUG: File info:', req.file);
+    
     if (!req.file) {
+      console.log('DEBUG: No file in request');
       return res.status(400).json({ error: 'No file uploaded' });
     }
 

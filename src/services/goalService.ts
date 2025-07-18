@@ -2,8 +2,12 @@ import { authService } from './authService';
 import { UserGoal } from '../types';
 
 // API base URL configuration
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-  ? 'http://localhost:3001/api'
+const API_BASE_URL = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || 
+   window.location.hostname.startsWith('10.') ||
+   window.location.hostname.startsWith('192.168.') ||
+   window.location.hostname.startsWith('172.'))
+  ? `http://${window.location.hostname}:3001/api`
   : '/api';
 
 export const goalService = {

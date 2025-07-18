@@ -11,8 +11,7 @@ import {
   Keyboard
 } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import * as ImagePicker from 'expo-image-picker';
-import * as ImageManipulator from 'expo-image-manipulator';
+import { imagePicker } from '../services/imagePicker';
 import { settingsService } from '../services/settingsService';
 import { goalService } from '../services/goalService';
 import { authStateManager } from '../services/authStateManager';
@@ -54,7 +53,6 @@ export default function ProfileScreen() {
       setFullName(profileData?.full_name || '');
       setMotivation(profileData?.motivation_text || '');
       setGender(profileData?.gender || '');
-      console.log('Profile loaded, profile_picture_url:', profileData?.profile_picture_url);
       
       // Set profile picture URL directly from backend
       if (profileData?.profile_picture_url) {
@@ -69,63 +67,33 @@ export default function ProfileScreen() {
     }
   };
 
-  const compressImage = async (uri: string): Promise<string> => {
-    try {
-      // Start with high quality and gradually reduce if needed
-      let quality = 0.8;
-      let compressedImage = await ImageManipulator.manipulateAsync(
-        uri,
-        [{ resize: { width: 400, height: 400 } }], // Resize to 400x400 max
-        { compress: quality, format: ImageManipulator.SaveFormat.JPEG }
-      );
-
-      // In React Native, we can't easily check file size via headers
-      // So we'll just do a reasonable compression and trust the 1MB storage limit
-      console.log(`Image compressed and resized to 400x400 with ${quality} quality`);
-      return compressedImage.uri;
-    } catch (error) {
-      console.error('Error compressing image:', error);
-      return uri; // Return original if compression fails
-    }
-  };
-
   const showImagePickerOptions = () => {
-    Alert.alert(
-      'Select Profile Picture',
-      'Choose how you want to update your profile picture',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'Take Photo', onPress: takePhoto },
-        { text: 'Choose from Library', onPress: pickImage },
-      ],
-      { cancelable: true }
+    imagePicker.showImagePickerAlert(
+      takePhoto,
+      pickImage,
+      () => console.log('Image picker cancelled')
     );
   };
 
   const takePhoto = async () => {
     try {
-      const { status } = await ImagePicker.requestCameraPermissionsAsync();
-      if (status !== 'granted') {
+      const hasPermission = await imagePicker.requestCameraPermissions();
+      if (!hasPermission) {
         Alert.alert('Permission Required', 'Please grant camera permissions to take a photo.');
         return;
       }
 
-      const result = await ImagePicker.launchCameraAsync({
-        mediaTypes: 'Images' as any,
+      const result = await imagePicker.takePhoto({
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
-      if (!result.canceled && result.assets[0]) {
-        const imageUri = result.assets[0].uri;
-        console.log('Original camera image URI:', imageUri);
-        const compressedUri = await compressImage(imageUri);
-        console.log('Compressed camera image URI:', compressedUri);
+      if (!result.cancelled && result.uri) {
+        const compressedUri = await imagePicker.compressImage(result.uri);
         
-        // Upload to Supabase storage and get the storage path
+        // Upload to backend storage and get the storage path
         const storagePath = await settingsService.uploadProfilePicture(compressedUri);
-        console.log('Image uploaded to storage path:', storagePath);
         
         // Update profile with storage path
         await settingsService.updateProfile({ profile_picture_url: storagePath });
@@ -139,28 +107,23 @@ export default function ProfileScreen() {
 
   const pickImage = async () => {
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
+      const hasPermission = await imagePicker.requestPermissions();
+      if (!hasPermission) {
         Alert.alert('Permission Required', 'Please grant camera roll permissions to update your profile picture.');
         return;
       }
 
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: 'Images' as any,
+      const result = await imagePicker.pickImage({
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
-      if (!result.canceled && result.assets[0]) {
-        const imageUri = result.assets[0].uri;
-        console.log('Original library image URI:', imageUri);
-        const compressedUri = await compressImage(imageUri);
-        console.log('Compressed library image URI:', compressedUri);
+      if (!result.cancelled && result.uri) {
+        const compressedUri = await imagePicker.compressImage(result.uri);
         
-        // Upload to Supabase storage and get the storage path
+        // Upload to backend storage and get the storage path
         const storagePath = await settingsService.uploadProfilePicture(compressedUri);
-        console.log('Image uploaded to storage path:', storagePath);
         
         // Update profile with storage path
         await settingsService.updateProfile({ profile_picture_url: storagePath });
@@ -270,17 +233,14 @@ export default function ProfileScreen() {
 
       {/* Profile Picture */}
       <View style={styles.profileSection}>
-        <TouchableOpacity style={styles.profilePictureContainer} onPress={showImagePickerOptions}>
+        <TouchableOpacity 
+          style={styles.profilePictureContainer}
+          onPress={showImagePickerOptions}
+        >
           {profilePictureUrl ? (
             <Image 
               source={{ uri: profilePictureUrl }} 
               style={styles.profilePicture}
-              onError={(error) => {
-                console.log('Profile image failed to load:', profilePictureUrl, error);
-              }}
-              onLoad={() => {
-                console.log('Profile image loaded successfully:', profilePictureUrl);
-              }}
             />
           ) : (
             <View style={styles.profilePicturePlaceholder}>
@@ -289,7 +249,10 @@ export default function ProfileScreen() {
             </View>
           )}
         </TouchableOpacity>
-        <TouchableOpacity style={styles.changePictureButton} onPress={showImagePickerOptions}>
+        <TouchableOpacity 
+          style={styles.changePictureButton}
+          onPress={showImagePickerOptions}
+        >
           <Text style={styles.changePictureText}>📷 Change Profile Picture</Text>
         </TouchableOpacity>
       </View>

@@ -2,8 +2,12 @@ import { authService } from './authService';
 import { UserProfile } from '../types';
 
 // API base URL configuration
-const API_BASE_URL = typeof window !== 'undefined' && window.location.hostname === 'localhost' 
-  ? 'http://localhost:3001/api'
+const API_BASE_URL = typeof window !== 'undefined' && 
+  (window.location.hostname === 'localhost' || 
+   window.location.hostname.startsWith('10.') ||
+   window.location.hostname.startsWith('192.168.') ||
+   window.location.hostname.startsWith('172.'))
+  ? `http://${window.location.hostname}:3001/api`
   : '/api';
 
 export const settingsService = {
@@ -12,20 +16,40 @@ export const settingsService = {
     if (!user) throw new Error('User not authenticated');
 
     try {
+      console.log('DEBUG: Starting upload process');
+      console.log('DEBUG: Image URI:', compressedImageUri);
+      console.log('DEBUG: API_BASE_URL:', API_BASE_URL);
+      
       // Create a unique filename
       const fileExt = compressedImageUri.split('.').pop() || 'jpg';
-      const fileName = `${user.id}/profile-${Date.now()}.${fileExt}`;
+      const fileName = `profile-${Date.now()}.${fileExt}`;
+      console.log('DEBUG: Generated filename:', fileName);
       
-      // For React Native, we need to handle the file differently
+      // For web (iOS Safari), we need to handle files differently than React Native
       const formData = new FormData();
-      formData.append('file', {
-        uri: compressedImageUri,
-        type: `image/${fileExt}`,
-        name: fileName.split('/').pop()
-      } as any);
+      
+      // Check if we're dealing with a blob URL (web) or file URI (native)
+      if (compressedImageUri.startsWith('blob:') || compressedImageUri.startsWith('data:')) {
+        console.log('DEBUG: Handling web blob/data URL');
+        // Convert blob URL to blob for web upload
+        const response = await fetch(compressedImageUri);
+        const blob = await response.blob();
+        console.log('DEBUG: Blob created, size:', blob.size, 'type:', blob.type);
+        formData.append('file', blob, fileName);
+      } else {
+        console.log('DEBUG: Handling native file URI');
+        // Native React Native file handling
+        formData.append('file', {
+          uri: compressedImageUri,
+          type: `image/${fileExt}`,
+          name: fileName
+        } as any);
+      }
       
       // Upload to Node.js backend
       const token = localStorage.getItem('authToken');
+      console.log('DEBUG: Making upload request to:', `${API_BASE_URL}/upload/profile-picture`);
+      
       const response = await fetch(`${API_BASE_URL}/upload/profile-picture`, {
         method: 'POST',
         headers: {
@@ -34,18 +58,20 @@ export const settingsService = {
         body: formData
       });
       
+      console.log('DEBUG: Upload response status:', response.status);
+      
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('Upload failed:', response.status, errorText);
+        console.error('DEBUG: Upload failed:', response.status, errorText);
         throw new Error(`Upload failed: ${response.status} ${errorText}`);
       }
       
       const data = await response.json();
-      console.log('Image uploaded:', data.fileName);
+      console.log('DEBUG: Upload successful, response:', data);
       return data.fileName;
     } catch (error) {
-      console.error('Error uploading profile picture:', error);
-      throw error;
+      console.error('DEBUG: Upload error:', error);
+      throw new Error(`Failed to upload image: ${error.message}`);
     }
   },
   async updateProfile(updates: Partial<UserProfile>): Promise<UserProfile> {
