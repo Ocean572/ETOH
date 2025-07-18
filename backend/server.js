@@ -1134,6 +1134,9 @@ app.get('/api/friends/:friendId/drinks/chart', authenticateToken, async (req, re
     }
 
     // Get friend's drink entries within the date range
+    console.log(`Friend chart data query - friendId: ${friendId}, timeRange: ${timeRange}`);
+    console.log(`Date range: ${startDate.toISOString()} to ${now.toISOString()}`);
+    
     const result = await pool.query(
       `SELECT DATE(logged_at AT TIME ZONE 'UTC') as date, SUM(drink_count) as total_drinks
        FROM drink_entries 
@@ -1144,6 +1147,8 @@ app.get('/api/friends/:friendId/drinks/chart', authenticateToken, async (req, re
        ORDER BY DATE(logged_at AT TIME ZONE 'UTC')`,
       [friendId, startDate.toISOString(), now.toISOString()]
     );
+    
+    console.log(`Found ${result.rows.length} date groups for friend ${friendId}:`, result.rows);
 
     // Process the data to create labels and data arrays
     const labels = [];
@@ -1157,7 +1162,10 @@ app.get('/api/friends/:friendId/drinks/chart', authenticateToken, async (req, re
         const date = new Date(monday);
         date.setDate(monday.getDate() + i);
         const dateStr = date.toISOString().split('T')[0];
-        const dayData = result.rows.find(row => row.date === dateStr);
+        const dayData = result.rows.find(row => {
+          const rowDateStr = row.date instanceof Date ? row.date.toISOString().split('T')[0] : row.date;
+          return rowDateStr === dateStr;
+        });
         
         labels.push(date.toLocaleDateString('en-US', { weekday: 'short' }));
         data.push(dayData ? parseInt(dayData.total_drinks) : 0);
@@ -1182,7 +1190,7 @@ app.get('/api/friends/:friendId/drinks/chart', authenticateToken, async (req, re
         weekEnd.setDate(weekStart.getDate() + 6);
         
         const weekData = result.rows.filter(row => {
-          const rowDate = new Date(row.date + 'T00:00:00Z');
+          const rowDate = row.date instanceof Date ? row.date : new Date(row.date + 'T00:00:00Z');
           return rowDate >= weekStart && rowDate <= weekEnd;
         });
         
@@ -1199,7 +1207,7 @@ app.get('/api/friends/:friendId/drinks/chart', authenticateToken, async (req, re
         const monthEnd = new Date(currentYear, month + 1, 0);
         
         const monthData = result.rows.filter(row => {
-          const rowDate = new Date(row.date + 'T00:00:00Z');
+          const rowDate = row.date instanceof Date ? row.date : new Date(row.date + 'T00:00:00Z');
           return rowDate >= monthStart && rowDate <= monthEnd;
         });
         
@@ -1209,6 +1217,7 @@ app.get('/api/friends/:friendId/drinks/chart', authenticateToken, async (req, re
       }
     }
 
+    console.log(`Final friend chart data for ${friendId}:`, { labels, data });
     res.json({ labels, data });
   } catch (error) {
     console.error('Get friend chart data error:', error);

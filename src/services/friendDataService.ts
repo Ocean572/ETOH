@@ -95,6 +95,8 @@ export const friendDataService = {
     if (!user) throw new Error('User not authenticated');
 
     const token = localStorage.getItem('authToken');
+    console.log(`Frontend: Fetching friend chart data for ${friendId}, timeRange: ${timeRange}`);
+    
     const response = await fetch(`${API_BASE_URL}/friends/${friendId}/drinks/chart?timeRange=${timeRange}`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -102,11 +104,16 @@ export const friendDataService = {
     });
 
     if (!response.ok) {
+      console.error(`Frontend: Friend chart data request failed:`, response.status, response.statusText);
       if (response.status === 404) return { labels: [], data: [] };
       throw new Error('Failed to fetch friend chart data');
     }
 
-    return await response.json();
+    const data = await response.json();
+    console.log(`Frontend: Received friend chart data:`, data);
+    console.log(`Frontend: Chart labels:`, data.labels);
+    console.log(`Frontend: Chart data values:`, data.data);
+    return data;
   },
 
   async getFriendAnalytics(friendId: string): Promise<any> {
