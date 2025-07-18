@@ -254,6 +254,8 @@ function MainStackNavigator() {
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [navigationState, setNavigationState] = useState();
+  const [isNavigationReady, setIsNavigationReady] = useState(false);
 
   useEffect(() => {
     checkAuthStatus();
@@ -267,19 +269,54 @@ export default function App() {
     return () => authStateManager.removeListener(handleAuthChange);
   }, []);
 
+  useEffect(() => {
+    const restoreNavigationState = async () => {
+      try {
+        if (typeof window !== 'undefined') {
+          const savedStateString = localStorage.getItem('NAVIGATION_STATE');
+          const state = savedStateString ? JSON.parse(savedStateString) : undefined;
+          if (state !== undefined) {
+            setNavigationState(state);
+          }
+        }
+      } catch (e) {
+        // Error occurred while restoring navigation state
+        console.log('Could not restore navigation state:', e);
+      } finally {
+        setIsNavigationReady(true);
+      }
+    };
+
+    restoreNavigationState();
+  }, []);
+
   const checkAuthStatus = async () => {
     try {
       const user = await authService.getCurrentUser();
-      setIsAuthenticated(!!user);
+      const wasAuthenticated = isAuthenticated;
+      const isNowAuthenticated = !!user;
+      
+      setIsAuthenticated(isNowAuthenticated);
+      
+      // Clear navigation state when logging out
+      if (wasAuthenticated && !isNowAuthenticated && typeof window !== 'undefined') {
+        localStorage.removeItem('NAVIGATION_STATE');
+        setNavigationState(undefined);
+      }
     } catch (error) {
       console.error('Error checking auth status:', error);
       setIsAuthenticated(false);
+      // Clear navigation state on auth error
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('NAVIGATION_STATE');
+        setNavigationState(undefined);
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (isLoading) {
+  if (isLoading || !isNavigationReady) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <Text>Loading...</Text>
@@ -289,7 +326,16 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
+      <NavigationContainer
+        initialState={isAuthenticated ? navigationState : undefined}
+        onStateChange={(state) => {
+          // Only save navigation state when authenticated
+          if (isAuthenticated && typeof window !== 'undefined') {
+            localStorage.setItem('NAVIGATION_STATE', JSON.stringify(state));
+          }
+        }}
+        onReady={() => setIsNavigationReady(true)}
+      >
         {isAuthenticated ? (
           <MainStackNavigator />
         ) : (

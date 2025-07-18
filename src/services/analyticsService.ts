@@ -8,24 +8,32 @@ export interface ChartData {
   data: number[];
 }
 
+// Helper function to get Monday of the current week
+const getMonday = (date: Date): Date => {
+  const day = date.getDay();
+  const diff = date.getDate() - day + (day === 0 ? -6 : 1); // Adjust when day is Sunday
+  return new Date(date.setDate(diff));
+};
+
 // Helper function to get start date based on time range
 const getStartDate = (range: TimeRange): string => {
   const now = new Date();
-  const start = new Date();
   
   switch (range) {
     case 'week':
-      start.setDate(now.getDate() - 6); // Last 7 days
-      break;
+      // Start from Monday of current week, go back to Monday of last week
+      const monday = getMonday(new Date(now));
+      monday.setDate(monday.getDate() - 6); // Go back 6 days to get 7 days total (Mon-Sun)
+      return monday.toISOString().split('T')[0];
     case 'month':
-      start.setDate(now.getDate() - 27); // Last 4 weeks (28 days)
-      break;
+      // Start from first day of current month
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      return monthStart.toISOString().split('T')[0];
     case 'year':
-      start.setMonth(now.getMonth() - 11); // Last 12 months
-      break;
+      // Start from January 1st of current year
+      const yearStart = new Date(now.getFullYear(), 0, 1);
+      return yearStart.toISOString().split('T')[0];
   }
-  
-  return start.toISOString().split('T')[0];
 };
 
 // Helper function to format labels based on time range
@@ -50,26 +58,40 @@ const groupEntriesByPeriod = (entries: DrinkEntry[], range: TimeRange): ChartDat
   const data: number[] = [];
   
   if (range === 'week') {
-    // Group by day for the last 7 days
-    for (let i = 6; i >= 0; i--) {
-      const date = new Date();
-      date.setDate(now.getDate() - i);
+    // Group by day from Monday to Sunday of current week
+    const monday = getMonday(new Date(now));
+    
+    for (let i = 0; i < 7; i++) {
+      const date = new Date(monday);
+      date.setDate(monday.getDate() + i);
       const dateStr = date.toISOString().split('T')[0];
       
       const dayTotal = entries
         .filter(entry => entry.logged_at.startsWith(dateStr))
         .reduce((sum, entry) => sum + entry.drink_count, 0);
       
-      labels.push(formatLabel(date, range));
+      labels.push(date.toLocaleDateString('en-US', { weekday: 'short' }));
       data.push(dayTotal);
     }
   } else if (range === 'month') {
-    // Group by week for the last 4 weeks
-    for (let i = 3; i >= 0; i--) {
-      const weekStart = new Date();
-      weekStart.setDate(now.getDate() - (i * 7) - 6);
-      const weekEnd = new Date();
-      weekEnd.setDate(now.getDate() - (i * 7));
+    // Group by week within the current month (Week 1, Week 2, Week 3, Week 4)
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    const firstDayOfMonth = new Date(currentYear, currentMonth, 1);
+    const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0);
+    
+    // Find the first Monday of the month (or before if month doesn't start on Monday)
+    const firstMonday = getMonday(new Date(firstDayOfMonth));
+    if (firstMonday > firstDayOfMonth) {
+      firstMonday.setDate(firstMonday.getDate() - 7);
+    }
+    
+    // Create 4 weeks of data
+    for (let week = 1; week <= 4; week++) {
+      const weekStart = new Date(firstMonday);
+      weekStart.setDate(firstMonday.getDate() + (week - 1) * 7);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setDate(weekStart.getDate() + 6);
       
       const weekTotal = entries
         .filter(entry => {
@@ -78,16 +100,16 @@ const groupEntriesByPeriod = (entries: DrinkEntry[], range: TimeRange): ChartDat
         })
         .reduce((sum, entry) => sum + entry.drink_count, 0);
       
-      labels.push(`Week ${4 - i}`);
+      labels.push(`Week ${week}`);
       data.push(weekTotal);
     }
   } else if (range === 'year') {
-    // Group by month for the last 12 months
-    for (let i = 11; i >= 0; i--) {
-      const monthDate = new Date();
-      monthDate.setMonth(now.getMonth() - i);
-      const monthStart = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-      const monthEnd = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0);
+    // Group by month for the current year (January to December)
+    const currentYear = now.getFullYear();
+    
+    for (let month = 0; month < 12; month++) {
+      const monthStart = new Date(currentYear, month, 1);
+      const monthEnd = new Date(currentYear, month + 1, 0);
       
       const monthTotal = entries
         .filter(entry => {
@@ -96,7 +118,7 @@ const groupEntriesByPeriod = (entries: DrinkEntry[], range: TimeRange): ChartDat
         })
         .reduce((sum, entry) => sum + entry.drink_count, 0);
       
-      labels.push(formatLabel(monthDate, range));
+      labels.push(monthStart.toLocaleDateString('en-US', { month: 'short' }));
       data.push(monthTotal);
     }
   }
