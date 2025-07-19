@@ -54,8 +54,6 @@ services:
     restart: unless-stopped
     ports:
       - "19006:80"
-    environment:
-      - API_URL=http://localhost:3001
     depends_on:
       - api
     networks:

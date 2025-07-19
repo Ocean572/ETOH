@@ -14,8 +14,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { imagePicker } from '../services/imagePicker';
 import { settingsService } from '../services/settingsService';
 import { goalService } from '../services/goalService';
+import { authService } from '../services/authService';
 import { authStateManager } from '../services/authStateManager';
 import { UserProfile, UserGoal } from '../types';
+import ConfirmationPopup from '../components/ConfirmationPopup';
 
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -28,6 +30,8 @@ export default function ProfileScreen() {
   const [isEditingGender, setIsEditingGender] = useState(false);
   const [loading, setLoading] = useState(true);
   const [profilePictureUrl, setProfilePictureUrl] = useState<string | null>(null);
+  const [showSignOutPopup, setShowSignOutPopup] = useState(false);
+  const [showResetPopup, setShowResetPopup] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -57,9 +61,7 @@ export default function ProfileScreen() {
       // Set profile picture URL with full backend URL
       if (profileData?.profile_picture_url) {
         // Construct full URL for backend-served static files
-        const backendUrl = __DEV__ 
-          ? 'http://10.20.30.174:3001'  // Development - use host machine IP
-          : '';                         // Production
+        const backendUrl = 'http://10.20.30.174:3001';
         setProfilePictureUrl(`${backendUrl}${profileData.profile_picture_url}`);
       } else {
         setProfilePictureUrl(null);
@@ -175,49 +177,35 @@ export default function ProfileScreen() {
   };
 
   const handleReset = () => {
-    Alert.alert(
-      'Reset Application',
-      'This will permanently delete all your drink entries, goals, and statistics. Your average calculations will restart from today. This action cannot be undone.\n\nAre you sure you want to continue?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await settingsService.resetApplication();
-              Alert.alert('Success', 'Application has been reset. Your journey starts fresh today!');
-              await loadData();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            }
-          }
-        }
-      ]
-    );
+    setShowResetPopup(true);
+  };
+
+  const handleConfirmReset = async () => {
+    try {
+      await settingsService.resetApplication();
+      Alert.alert('Success', 'Application has been reset. Your journey starts fresh today!');
+      await loadData();
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setShowResetPopup(false);
+    }
   };
 
   const handleSignOut = () => {
-    Alert.alert(
-      'Sign Out',
-      'Are you sure you want to sign out?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign Out',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await settingsService.signOut();
-              // Notify all listeners that auth state changed
-              authStateManager.notifyAuthChanged();
-            } catch (error: any) {
-              Alert.alert('Error', error.message);
-            }
-          }
-        }
-      ]
-    );
+    setShowSignOutPopup(true);
+  };
+
+  const handleConfirmSignOut = async () => {
+    try {
+      await authService.signOut();
+      // Notify all listeners that auth state changed
+      authStateManager.notifyAuthChanged();
+    } catch (error: any) {
+      Alert.alert('Error', error.message);
+    } finally {
+      setShowSignOutPopup(false);
+    }
   };
 
   if (loading) {
@@ -229,7 +217,8 @@ export default function ProfileScreen() {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <>
+      <ScrollView style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Profile</Text>
         <Text style={styles.subtitle}>Manage your profile and preferences</Text>
@@ -465,7 +454,26 @@ export default function ProfileScreen() {
           <Text style={styles.signOutButtonText}>Sign Out</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+      </ScrollView>
+
+      <ConfirmationPopup
+        visible={showSignOutPopup}
+        onConfirm={handleConfirmSignOut}
+        onCancel={() => setShowSignOutPopup(false)}
+        title="Sign Out"
+        message="Are you sure you want to sign out?"
+      />
+
+      <ConfirmationPopup
+        visible={showResetPopup}
+        onConfirm={handleConfirmReset}
+        onCancel={() => setShowResetPopup(false)}
+        title="Reset Application"
+        message="This will permanently delete all your drink entries, goals, and statistics. Your average calculations will restart from today. This action cannot be undone.
+
+Are you sure you want to continue?"
+      />
+    </>
   );
 }
 

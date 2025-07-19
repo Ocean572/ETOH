@@ -2,10 +2,8 @@ import { authService } from './authService';
 import { ChartData, TimeRange } from './analyticsService';
 import { storage } from './storage';
 
-// API base URL configuration - simplified for reliability
-const API_BASE_URL = __DEV__ 
-  ? 'http://10.20.30.174:3001/api'  // Development - use host machine IP
-  : '/api';                         // Production
+// API base URL configuration - simplified for Docker localhost and Expo development
+const API_BASE_URL = 'http://10.20.30.174:3001/api';
 
 export interface FriendProfile {
   id: string;

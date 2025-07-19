@@ -1,10 +1,13 @@
 import { authService } from './authService';
 import { storage } from './storage';
 
-// API base URL for Node.js backend - simplified for reliability
-const API_BASE_URL = __DEV__ 
-  ? 'http://10.20.30.174:3001/api'  // Development - use host machine IP
-  : '/api';                         // Production
+// API base URL configuration - simplified for Docker localhost and Expo development
+const API_BASE_URL = 'http://10.20.30.174:3001/api';
+
+// Helper function to get backend base URL (same logic as API but without /api)
+const getBackendBaseUrl = () => {
+  return 'http://10.20.30.174:3001';
+};
 
 export interface FriendRequest {
   id: string;
@@ -178,7 +181,12 @@ export const friendsService = {
       }
 
       const data = await response.json();
-      return data?.profile_picture_url || null;
+      const relativePath = data?.profile_picture_url;
+      if (relativePath) {
+        // Convert relative path to absolute URL using dynamic backend URL
+        return `${getBackendBaseUrl()}${relativePath}`;
+      }
+      return null;
     } catch (error) {
       console.error('Error getting friend profile picture URL:', error);
       return null;
