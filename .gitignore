@@ -129,3 +129,5 @@ temp/
 ios/
 android/
 capacitor.config.json
+
+.expo/
