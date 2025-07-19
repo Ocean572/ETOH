@@ -54,9 +54,13 @@ export default function ProfileScreen() {
       setMotivation(profileData?.motivation_text || '');
       setGender(profileData?.gender || '');
       
-      // Set profile picture URL directly from backend
+      // Set profile picture URL with full backend URL
       if (profileData?.profile_picture_url) {
-        setProfilePictureUrl(profileData.profile_picture_url);
+        // Construct full URL for backend-served static files
+        const backendUrl = __DEV__ 
+          ? 'http://10.20.30.174:3001'  // Development - use host machine IP
+          : '';                         // Production
+        setProfilePictureUrl(`${backendUrl}${profileData.profile_picture_url}`);
       } else {
         setProfilePictureUrl(null);
       }

@@ -93,8 +93,11 @@ class ImagePickerService {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = 'image/*';
-      // Add capture attribute for camera access on mobile web
-      input.capture = 'environment';
+      // Add capture attribute for camera access on mobile web (but not iOS Safari)
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if (!isIOS) {
+        input.capture = 'environment';
+      }
       
       input.onchange = async (event) => {
         const file = (event.target as HTMLInputElement).files?.[0];

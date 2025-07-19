@@ -8,6 +8,7 @@ import { View, Text, TouchableOpacity, Alert, StyleSheet, Platform } from 'react
 
 import { authService } from './src/services/authService';
 import { authStateManager } from './src/services/authStateManager';
+import { storage } from './src/services/storage';
 import AuthScreen from './src/screens/AuthScreen';
 import HomeScreen from './src/screens/HomeScreen';
 import HistoryScreenComponent from './src/screens/HistoryScreen';
@@ -273,7 +274,7 @@ export default function App() {
     const restoreNavigationState = async () => {
       try {
         if (typeof window !== 'undefined') {
-          const savedStateString = localStorage.getItem('NAVIGATION_STATE');
+          const savedStateString = await storage.getItemAsync('NAVIGATION_STATE');
           const state = savedStateString ? JSON.parse(savedStateString) : undefined;
           if (state !== undefined) {
             setNavigationState(state);
@@ -300,7 +301,7 @@ export default function App() {
       
       // Clear navigation state when logging out
       if (wasAuthenticated && !isNowAuthenticated && typeof window !== 'undefined') {
-        localStorage.removeItem('NAVIGATION_STATE');
+        storage.removeItemAsync('NAVIGATION_STATE');
         setNavigationState(undefined);
       }
     } catch (error) {
@@ -308,7 +309,7 @@ export default function App() {
       setIsAuthenticated(false);
       // Clear navigation state on auth error
       if (typeof window !== 'undefined') {
-        localStorage.removeItem('NAVIGATION_STATE');
+        storage.removeItemAsync('NAVIGATION_STATE');
         setNavigationState(undefined);
       }
     } finally {
@@ -331,7 +332,7 @@ export default function App() {
         onStateChange={(state) => {
           // Only save navigation state when authenticated
           if (isAuthenticated && typeof window !== 'undefined') {
-            localStorage.setItem('NAVIGATION_STATE', JSON.stringify(state));
+            storage.setItemAsync('NAVIGATION_STATE', JSON.stringify(state));
           }
         }}
         onReady={() => setIsNavigationReady(true)}

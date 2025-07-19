@@ -1,11 +1,9 @@
-// API base URL configuration
-const API_BASE_URL = typeof window !== 'undefined' && 
-  (window.location.hostname === 'localhost' || 
-   window.location.hostname.startsWith('10.') ||
-   window.location.hostname.startsWith('192.168.') ||
-   window.location.hostname.startsWith('172.'))
-  ? `http://${window.location.hostname}:3001/api`
-  : '/api';
+import { storage } from './storage';
+
+// API base URL configuration - simplified for reliability
+const API_BASE_URL = __DEV__ 
+  ? 'http://10.20.30.174:3001/api'  // Development - use host machine IP
+  : '/api';                         // Production
 
 export const authService = {
   async signUp(email: string, password: string, fullName?: string, gender?: 'male' | 'female' | 'other' | 'prefer_not_to_say') {
@@ -28,9 +26,9 @@ export const authService = {
       throw new Error(data.error || 'Registration failed');
     }
     
-    // Store token in localStorage
+    // Store token in storage
     if (data.token) {
-      localStorage.setItem('authToken', data.token);
+      await storage.setItemAsync('authToken', data.token);
     }
     
     return data;
@@ -55,9 +53,9 @@ export const authService = {
         throw new Error(data.error || 'Login failed');
       }
       
-      // Store token in localStorage
+      // Store token in storage
       if (data.token) {
-        localStorage.setItem('authToken', data.token);
+        await storage.setItemAsync('authToken', data.token);
       }
       
       return data;
@@ -68,7 +66,7 @@ export const authService = {
   },
 
   async getCurrentUser() {
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     if (!token) {
       return null;
     }
@@ -82,19 +80,19 @@ export const authService = {
 
       if (!response.ok) {
         // Token is invalid, remove it
-        localStorage.removeItem('authToken');
+        await storage.removeItemAsync('authToken');
         return null;
       }
 
       return await response.json();
     } catch (error) {
       console.error('Error getting current user:', error);
-      localStorage.removeItem('authToken');
+      await storage.removeItemAsync('authToken');
       return null;
     }
   },
 
   async signOut() {
-    localStorage.removeItem('authToken');
+    await storage.removeItemAsync('authToken');
   },
 };

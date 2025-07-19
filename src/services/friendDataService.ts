@@ -1,14 +1,11 @@
 import { authService } from './authService';
 import { ChartData, TimeRange } from './analyticsService';
+import { storage } from './storage';
 
-// API base URL configuration
-const API_BASE_URL = typeof window !== 'undefined' && 
-  (window.location.hostname === 'localhost' || 
-   window.location.hostname.startsWith('10.') ||
-   window.location.hostname.startsWith('192.168.') ||
-   window.location.hostname.startsWith('172.'))
-  ? `http://${window.location.hostname}:3001/api`
-  : '/api';
+// API base URL configuration - simplified for reliability
+const API_BASE_URL = __DEV__ 
+  ? 'http://10.20.30.174:3001/api'  // Development - use host machine IP
+  : '/api';                         // Production
 
 export interface FriendProfile {
   id: string;
@@ -33,7 +30,7 @@ export const friendDataService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/friends/${friendId}/profile`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -52,7 +49,7 @@ export const friendDataService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/friends/${friendId}/goals`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -76,7 +73,7 @@ export const friendDataService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const today = new Date().toISOString().split('T')[0];
     
     const response = await fetch(`${API_BASE_URL}/friends/${friendId}/drinks/today?date=${today}`, {
@@ -98,7 +95,7 @@ export const friendDataService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/friends/${friendId}/drinks/chart?timeRange=${timeRange}`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -117,7 +114,7 @@ export const friendDataService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/friends/${friendId}/analytics`, {
       headers: {
         'Authorization': `Bearer ${token}`,

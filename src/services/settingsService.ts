@@ -1,14 +1,11 @@
 import { authService } from './authService';
 import { UserProfile } from '../types';
+import { storage } from './storage';
 
-// API base URL configuration
-const API_BASE_URL = typeof window !== 'undefined' && 
-  (window.location.hostname === 'localhost' || 
-   window.location.hostname.startsWith('10.') ||
-   window.location.hostname.startsWith('192.168.') ||
-   window.location.hostname.startsWith('172.'))
-  ? `http://${window.location.hostname}:3001/api`
-  : '/api';
+// API base URL configuration - simplified for reliability
+const API_BASE_URL = __DEV__ 
+  ? 'http://10.20.30.174:3001/api'  // Development - use host machine IP
+  : '/api';                         // Production
 
 export const settingsService = {
   async uploadProfilePicture(compressedImageUri: string): Promise<string> {
@@ -16,28 +13,32 @@ export const settingsService = {
     if (!user) throw new Error('User not authenticated');
 
     try {
-      console.log('DEBUG: Starting upload process');
-      console.log('DEBUG: Image URI:', compressedImageUri);
-      console.log('DEBUG: API_BASE_URL:', API_BASE_URL);
-      
       // Create a unique filename
       const fileExt = compressedImageUri.split('.').pop() || 'jpg';
       const fileName = `profile-${Date.now()}.${fileExt}`;
-      console.log('DEBUG: Generated filename:', fileName);
       
       // For web (iOS Safari), we need to handle files differently than React Native
       const formData = new FormData();
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
       
       // Check if we're dealing with a blob URL (web) or file URI (native)
       if (compressedImageUri.startsWith('blob:') || compressedImageUri.startsWith('data:')) {
-        console.log('DEBUG: Handling web blob/data URL');
-        // Convert blob URL to blob for web upload
+        // Convert blob URL to blob for web upload with iOS-specific handling
         const response = await fetch(compressedImageUri);
-        const blob = await response.blob();
-        console.log('DEBUG: Blob created, size:', blob.size, 'type:', blob.type);
-        formData.append('file', blob, fileName);
+        
+        // Add timeout for iOS blob conversion to prevent hanging
+        const blob = await Promise.race([
+          response.blob(),
+          new Promise<never>((_, reject) => 
+            setTimeout(() => reject(new Error('Blob conversion timeout - iOS Safari may have memory constraints')), 15000)
+          )
+        ]);
+        
+        // For iOS, ensure we have a proper MIME type
+        const finalBlob = blob.type ? blob : new Blob([blob], { type: 'image/jpeg' });
+        
+        formData.append('file', finalBlob, fileName);
       } else {
-        console.log('DEBUG: Handling native file URI');
         // Native React Native file handling
         formData.append('file', {
           uri: compressedImageUri,
@@ -47,30 +48,50 @@ export const settingsService = {
       }
       
       // Upload to Node.js backend
-      const token = localStorage.getItem('authToken');
-      console.log('DEBUG: Making upload request to:', `${API_BASE_URL}/upload/profile-picture`);
+      const token = await storage.getItemAsync('authToken');
       
-      const response = await fetch(`${API_BASE_URL}/upload/profile-picture`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-        body: formData
-      });
+      // For iOS Safari, don't set Content-Type header - let the browser handle it
+      const headers: Record<string, string> = {
+        'Authorization': `Bearer ${token}`,
+      };
       
-      console.log('DEBUG: Upload response status:', response.status);
+      // Add longer timeout for iOS uploads
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => {
+        controller.abort();
+      }, isIOS ? 30000 : 20000); // 30s for iOS, 20s for others
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('DEBUG: Upload failed:', response.status, errorText);
-        throw new Error(`Upload failed: ${response.status} ${errorText}`);
+      try {
+        const response = await fetch(`${API_BASE_URL}/upload/profile-picture`, {
+          method: 'POST',
+          headers,
+          body: formData,
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Upload failed: ${response.status} ${errorText}`);
+        }
+        
+        const data = await response.json();
+        return data.fileName;
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        throw fetchError;
+      }
+    } catch (error) {
+      // Provide more specific error messages for iOS issues
+      if (error.name === 'AbortError') {
+        throw new Error(`Upload timeout - ${isIOS ? 'iOS Safari may have network constraints' : 'Network request took too long'}`);
       }
       
-      const data = await response.json();
-      console.log('DEBUG: Upload successful, response:', data);
-      return data.fileName;
-    } catch (error) {
-      console.error('DEBUG: Upload error:', error);
+      if (error.message.includes('Blob conversion timeout')) {
+        throw new Error('Image processing failed on iOS Safari - try a smaller image or use a different browser');
+      }
+      
       throw new Error(`Failed to upload image: ${error.message}`);
     }
   },
@@ -78,7 +99,7 @@ export const settingsService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/profile`, {
       method: 'PUT',
       headers: {
@@ -100,7 +121,7 @@ export const settingsService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/profile`, {
       headers: {
         'Authorization': `Bearer ${token}`,
@@ -120,7 +141,7 @@ export const settingsService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/profile/motivation`, {
       method: 'PUT',
       headers: {
@@ -140,7 +161,7 @@ export const settingsService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/profile/reset`, {
       method: 'POST',
       headers: {

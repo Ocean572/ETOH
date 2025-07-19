@@ -2,7 +2,7 @@ services:
   # PostgreSQL Database
   db:
     image: postgres:15
-    container_name: etoh-db
+    container_name: etoh-db-dev
     restart: unless-stopped
     environment:
       POSTGRES_DB: etoh_tracker
@@ -24,9 +24,9 @@ services:
   # Node.js Express API Backend
   api:
     build: ./backend
-    container_name: etoh-api
+    container_name: etoh-api-dev
     restart: unless-stopped
-    user: "1001:1001"  # Run as nodejs user for security
+    user: "1001:1001"
     ports:
       - "3001:3001"
     environment:
@@ -41,23 +41,10 @@ services:
       - UPLOAD_DIR=/app/uploads
     volumes:
       - uploads_data:/app/uploads
+      - ./backend:/app  # Live reload for development
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      - app-network
-
-  # Expo React Native App
-  app:
-    build: .
-    container_name: etoh-app
-    restart: unless-stopped
-    ports:
-      - "19006:80"
-    environment:
-      - API_URL=http://localhost:3001
-    depends_on:
-      - api
     networks:
       - app-network
 

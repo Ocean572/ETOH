@@ -1,13 +1,10 @@
 import { authService } from './authService';
+import { storage } from './storage';
 
-// API base URL for Node.js backend  
-const API_BASE_URL = typeof window !== 'undefined' && 
-  (window.location.hostname === 'localhost' || 
-   window.location.hostname.startsWith('10.') ||
-   window.location.hostname.startsWith('192.168.') ||
-   window.location.hostname.startsWith('172.'))
-  ? `http://${window.location.hostname}:3001/api`
-  : '/api';
+// API base URL for Node.js backend - simplified for reliability
+const API_BASE_URL = __DEV__ 
+  ? 'http://10.20.30.174:3001/api'  // Development - use host machine IP
+  : '/api';                         // Production
 
 export interface FriendRequest {
   id: string;
@@ -45,7 +42,7 @@ export const friendsService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/send-friend-request`, {
       method: 'POST',
       headers: {
@@ -68,7 +65,7 @@ export const friendsService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/get-friend-requests`, {
       method: 'POST',
       headers: {
@@ -90,7 +87,7 @@ export const friendsService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/accept-friend-request`, {
       method: 'POST',
       headers: {
@@ -110,7 +107,7 @@ export const friendsService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/get-friends`, {
       method: 'POST',
       headers: {
@@ -132,7 +129,7 @@ export const friendsService = {
     const user = await authService.getCurrentUser();
     if (!user) throw new Error('User not authenticated');
 
-    const token = localStorage.getItem('authToken');
+    const token = await storage.getItemAsync('authToken');
     const response = await fetch(`${API_BASE_URL}/remove-friend`, {
       method: 'POST',
       headers: {
@@ -165,7 +162,7 @@ export const friendsService = {
     if (!user) throw new Error('User not authenticated');
 
     try {
-      const token = localStorage.getItem('authToken');
+      const token = await storage.getItemAsync('authToken');
       const response = await fetch(`${API_BASE_URL}/get-friend-profile-picture`, {
         method: 'POST',
         headers: {
