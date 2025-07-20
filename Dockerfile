@@ -2,6 +2,11 @@
 FROM node:18-alpine AS builder
 RUN npm install -g @expo/cli
 WORKDIR /app
+
+# Accept API_URL as build argument
+ARG API_URL=http://localhost:3001
+ENV API_URL=$API_URL
+
 COPY package*.json ./
 RUN npm install
 COPY . .
