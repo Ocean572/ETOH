@@ -11,8 +11,9 @@ services:
     volumes:
       - postgres_data:/var/lib/postgresql/data
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
-    ports:
-      - "5432:5432"
+    # Remove external port mapping for security - only internal access
+    expose:
+      - "5432"
     networks:
       - app-network
     healthcheck:
@@ -27,10 +28,11 @@ services:
     container_name: etoh-api
     restart: unless-stopped
     user: "1001:1001"  # Run as nodejs user for security
-    ports:
-      - "3001:3001"
+    # Remove external port mapping - only internal access
+    expose:
+      - "3001"
     environment:
-      - NODE_ENV=development
+      - NODE_ENV=production  # Changed to production
       - PORT=3001
       - DB_HOST=db
       - DB_PORT=5432
@@ -52,8 +54,11 @@ services:
     build: .
     container_name: etoh-app
     restart: unless-stopped
-    ports:
-      - "19006:80"
+    # Remove external port mapping - only internal access
+    expose:
+      - "80"
+    environment:
+      - API_URL=${API_URL:-http://api:3001}
     depends_on:
       - api
     networks:
@@ -61,7 +66,8 @@ services:
 
 networks:
   app-network:
-    driver: bridge
+    external: true
+    name: secure-app-network
 
 volumes:
   postgres_data:

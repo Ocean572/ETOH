@@ -1,9 +1,10 @@
 import { authService } from './authService';
 import { UserGoal } from '../types';
 import { storage } from './storage';
+import config from '../utils/config';
 
-// API base URL configuration - simplified for Docker localhost and Expo development
-const API_BASE_URL = 'http://10.20.30.174:3001/api';
+// API base URL configuration
+const API_BASE_URL = `${config.apiUrl}/api`;
 
 export const goalService = {
   async getCurrentGoal(): Promise<UserGoal | null> {

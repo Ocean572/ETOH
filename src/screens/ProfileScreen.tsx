@@ -18,6 +18,7 @@ import { authService } from '../services/authService';
 import { authStateManager } from '../services/authStateManager';
 import { UserProfile, UserGoal } from '../types';
 import ConfirmationPopup from '../components/ConfirmationPopup';
+import config from '../utils/config';
 
 export default function ProfileScreen() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -61,8 +62,7 @@ export default function ProfileScreen() {
       // Set profile picture URL with full backend URL
       if (profileData?.profile_picture_url) {
         // Construct full URL for backend-served static files
-        const backendUrl = 'http://10.20.30.174:3001';
-        setProfilePictureUrl(`${backendUrl}${profileData.profile_picture_url}`);
+        setProfilePictureUrl(`${config.apiUrl}${profileData.profile_picture_url}`);
       } else {
         setProfilePictureUrl(null);
       }
