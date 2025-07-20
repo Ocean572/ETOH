@@ -6,22 +6,91 @@ const { Pool } = require('pg');
 const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
+const slowDown = require('express-slow-down');
+const { body, validationResult } = require('express-validator');
+const { fileTypeFromBuffer } = require('file-type-cjs');
+
 require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-// Middleware
-app.use(cors());
-app.use(express.json());
+// Security Middleware
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      scriptSrc: ["'self'"],
+      imgSrc: ["'self'", "data:", "https:"],
+    },
+  },
+  crossOriginResourcePolicy: { policy: "cross-origin" }
+}));
 
-// Database connection
+// CORS Configuration - Dynamic based on environment variables
+const allowedOrigins = process.env.FRONTEND_URL 
+  ? [process.env.FRONTEND_URL]
+  : (process.env.NODE_ENV === 'production' 
+      ? ['https://etoh.doctorfranz.com'] 
+      : ['http://localhost:3000', 'http://localhost:19006']);
+
+console.log('🔧 CORS Configuration:');
+console.log('NODE_ENV:', process.env.NODE_ENV);
+console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+console.log('Allowed Origins:', allowedOrigins);
+
+const corsOptions = {
+  origin: allowedOrigins,
+  credentials: true,
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
+
+// Rate limiting for all requests
+const generalLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 1000, // limit each IP to 1000 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use(generalLimiter);
+
+// Stricter rate limiting for auth endpoints
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 5, // limit each IP to 5 auth requests per windowMs
+  message: 'Too many authentication attempts, please try again later.',
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+// Slow down repeated requests
+const speedLimiter = slowDown({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  delayAfter: 2, // allow 2 requests per 15 minutes, then...
+  delayMs: 500 // begin adding 500ms of delay per request after delayAfter
+});
+
+// JSON parsing with size limit
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+
+// Database connection with security enhancements
 const pool = new Pool({
   host: process.env.DB_HOST || 'localhost',
   port: process.env.DB_PORT || 5432,
   database: process.env.DB_NAME || 'etoh_tracker',
   user: process.env.DB_USER || 'postgres',
   password: process.env.DB_PASSWORD,
+  ssl: process.env.NODE_ENV === 'production',
+  max: 20, // Maximum number of clients in the pool
+  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
+  connectionTimeoutMillis: 2000, // Return an error after 2 seconds if connection could not be established
+  query_timeout: 30000, // Query timeout after 30 seconds
 });
 
 // Test database connection
@@ -50,20 +119,81 @@ const storage = multer.diskStorage({
   }
 });
 
+// Enhanced file upload security
 const upload = multer({ 
   storage: storage,
-  limits: { fileSize: 2 * 1024 * 1024 }, // 2MB limit
-  fileFilter: (req, file, cb) => {
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-    if (allowedTypes.includes(file.mimetype)) {
+  limits: { 
+    fileSize: 5 * 1024 * 1024, // 5MB limit
+    files: 1 // Only one file per request
+  },
+  fileFilter: async (req, file, cb) => {
+    try {
+      // Check MIME type
+      const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+      if (!allowedMimeTypes.includes(file.mimetype)) {
+        return cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images allowed.'));
+      }
+
+      // Check file extension
+      const allowedExtensions = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
+      const fileExtension = path.extname(file.originalname).toLowerCase();
+      if (!allowedExtensions.includes(fileExtension)) {
+        return cb(new Error('Invalid file extension.'));
+      }
+
+      // Prevent path traversal in filename
+      const sanitizedFilename = path.basename(file.originalname);
+      if (sanitizedFilename !== file.originalname) {
+        return cb(new Error('Invalid filename.'));
+      }
+
       cb(null, true);
-    } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, and GIF allowed.'));
+    } catch (error) {
+      cb(error);
     }
   }
 });
 
-// JWT middleware
+// File signature validation function
+const validateFileSignature = async (filePath) => {
+  try {
+    const buffer = fs.readFileSync(filePath);
+    const fileType = await fileTypeFromBuffer(buffer);
+    
+    if (!fileType) {
+      return false;
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    return allowedTypes.includes(fileType.mime);
+  } catch (error) {
+    console.error('File signature validation error:', error);
+    return false;
+  }
+};
+
+// Enhanced JWT configuration
+const JWT_ACCESS_EXPIRES = '15m'; // Short-lived access tokens
+const JWT_REFRESH_EXPIRES = '7d'; // Longer-lived refresh tokens
+
+// Password validation helper
+const validatePassword = (password) => {
+  const minLength = 8;
+  const hasUpperCase = /[A-Z]/.test(password);
+  const hasLowerCase = /[a-z]/.test(password);
+  const hasNumbers = /\d/.test(password);
+  const hasSpecialChar = /[!@#$%^&*(),.?":{}|<>]/.test(password);
+  
+  return password.length >= minLength && hasUpperCase && hasLowerCase && hasNumbers && hasSpecialChar;
+};
+
+// Input sanitization helper
+const sanitizeInput = (input) => {
+  if (typeof input !== 'string') return input;
+  return input.trim().replace(/[<>]/g, '');
+};
+
+// Enhanced JWT middleware
 const authenticateToken = (req, res, next) => {
   const authHeader = req.headers.authorization;
   const token = authHeader && authHeader.split(' ')[1];
@@ -74,11 +204,26 @@ const authenticateToken = (req, res, next) => {
 
   jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
     if (err) {
-      return res.status(403).json({ error: 'Invalid or expired token' });
+      if (err.name === 'TokenExpiredError') {
+        return res.status(401).json({ error: 'Token expired' });
+      }
+      return res.status(403).json({ error: 'Invalid token' });
     }
     req.user = user;
     next();
   });
+};
+
+// Error handling middleware
+const handleValidationErrors = (req, res, next) => {
+  const errors = validationResult(req);
+  if (!errors.isEmpty()) {
+    return res.status(400).json({ 
+      error: 'Validation failed',
+      details: errors.array().map(err => err.msg)
+    });
+  }
+  next();
 };
 
 // Health check
@@ -87,8 +232,35 @@ app.get('/health', (req, res) => {
 });
 
 
-// Auth endpoints
-app.post('/api/auth/register', async (req, res) => {
+// Auth endpoints with validation and rate limiting
+app.post('/api/auth/register', 
+  authLimiter,
+  speedLimiter,
+  [
+    body('email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Valid email is required'),
+    body('password')
+      .custom(value => {
+        if (!validatePassword(value)) {
+          throw new Error('Password must be at least 8 characters with uppercase, lowercase, number, and special character');
+        }
+        return true;
+      }),
+    body('full_name')
+      .optional()
+      .isLength({ min: 1, max: 100 })
+      .trim()
+      .escape()
+      .withMessage('Full name must be 1-100 characters'),
+    body('gender')
+      .optional()
+      .isIn(['male', 'female', 'other', 'prefer_not_to_say'])
+      .withMessage('Invalid gender value')
+  ],
+  handleValidationErrors,
+  async (req, res) => {
   try {
     console.log('Registration attempt with body:', req.body);
     const { email, password, full_name, gender } = req.body;
@@ -121,15 +293,22 @@ app.post('/api/auth/register', async (req, res) => {
 
     const user = result.rows[0];
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
+    // Generate JWT tokens
+    const accessToken = jwt.sign(
+      { userId: user.id, email: user.email, type: 'access' },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: JWT_ACCESS_EXPIRES }
+    );
+    
+    const refreshToken = jwt.sign(
+      { userId: user.id, email: user.email, type: 'refresh' },
+      process.env.JWT_SECRET,
+      { expiresIn: JWT_REFRESH_EXPIRES }
     );
 
     res.json({
-      token,
+      accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -142,7 +321,20 @@ app.post('/api/auth/register', async (req, res) => {
   }
 });
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login',
+  authLimiter,
+  speedLimiter,
+  [
+    body('email')
+      .isEmail()
+      .normalizeEmail()
+      .withMessage('Valid email is required'),
+    body('password')
+      .isLength({ min: 1 })
+      .withMessage('Password is required')
+  ],
+  handleValidationErrors,
+  async (req, res) => {
   try {
     const { email, password } = req.body;
 
@@ -168,15 +360,22 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Generate JWT token
-    const token = jwt.sign(
-      { userId: user.id, email: user.email },
+    // Generate JWT tokens
+    const accessToken = jwt.sign(
+      { userId: user.id, email: user.email, type: 'access' },
       process.env.JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: JWT_ACCESS_EXPIRES }
+    );
+    
+    const refreshToken = jwt.sign(
+      { userId: user.id, email: user.email, type: 'refresh' },
+      process.env.JWT_SECRET,
+      { expiresIn: JWT_REFRESH_EXPIRES }
     );
 
     res.json({
-      token,
+      accessToken,
+      refreshToken,
       user: {
         id: user.id,
         email: user.email,
@@ -188,6 +387,39 @@ app.post('/api/auth/login', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
+
+// Refresh token endpoint
+app.post('/api/auth/refresh',
+  [
+    body('refreshToken')
+      .notEmpty()
+      .withMessage('Refresh token is required')
+  ],
+  handleValidationErrors,
+  async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+
+      jwt.verify(refreshToken, process.env.JWT_SECRET, (err, decoded) => {
+        if (err || decoded.type !== 'refresh') {
+          return res.status(401).json({ error: 'Invalid refresh token' });
+        }
+
+        // Generate new access token
+        const newAccessToken = jwt.sign(
+          { userId: decoded.userId, email: decoded.email, type: 'access' },
+          process.env.JWT_SECRET,
+          { expiresIn: JWT_ACCESS_EXPIRES }
+        );
+
+        res.json({ accessToken: newAccessToken });
+      });
+    } catch (error) {
+      console.error('Refresh token error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  }
+);
 
 // Get current user
 app.get('/api/auth/me', authenticateToken, async (req, res) => {
@@ -1225,49 +1457,104 @@ app.get('/api/friends/:friendId/drinks/chart', authenticateToken, async (req, re
   }
 });
 
-app.post('/api/upload/profile-picture', authenticateToken, upload.single('file'), async (req, res) => {
-  try {
-    console.log('DEBUG: Profile picture upload request received');
-    console.log('DEBUG: User ID:', req.user.userId);
-    console.log('DEBUG: Request headers:', req.headers);
-    console.log('DEBUG: File info:', req.file);
-    
-    if (!req.file) {
-      console.log('DEBUG: No file in request');
-      return res.status(400).json({ error: 'No file uploaded' });
+app.post('/api/upload/profile-picture', 
+  authenticateToken, 
+  rateLimit({
+    windowMs: 60 * 1000, // 1 minute
+    max: 3, // limit each user to 3 uploads per minute
+    message: 'Too many upload attempts, please try again later.',
+  }),
+  upload.single('file'), 
+  async (req, res) => {
+    let tempFilePath = null;
+    try {
+      if (!req.file) {
+        return res.status(400).json({ error: 'No file uploaded' });
+      }
+
+      tempFilePath = req.file.path;
+
+      // Validate file signature (magic number check)
+      const isValidSignature = await validateFileSignature(tempFilePath);
+      if (!isValidSignature) {
+        fs.unlinkSync(tempFilePath); // Clean up invalid file
+        return res.status(400).json({ error: 'Invalid file format detected' });
+      }
+
+      // Generate a secure filename with UUID-like structure
+      const fileExtension = path.extname(req.file.originalname).toLowerCase();
+      const timestamp = Date.now();
+      const randomSuffix = Math.random().toString(36).substring(2, 15);
+      const fileName = `profile-${req.user.userId}-${timestamp}-${randomSuffix}${fileExtension}`;
+      const finalPath = path.join(uploadDir, fileName);
+
+      // Ensure upload directory exists and has correct permissions
+      if (!fs.existsSync(uploadDir)) {
+        fs.mkdirSync(uploadDir, { recursive: true, mode: 0o755 });
+      }
+
+      // Move the uploaded file to the correct location
+      fs.renameSync(tempFilePath, finalPath);
+      tempFilePath = null; // File moved successfully
+
+      // Set secure file permissions
+      fs.chmodSync(finalPath, 0o644);
+
+      // Delete old profile picture if exists
+      try {
+        const oldPictureResult = await pool.query(
+          'SELECT profile_picture_url FROM users WHERE id = $1',
+          [req.user.userId]
+        );
+        
+        if (oldPictureResult.rows[0]?.profile_picture_url) {
+          const oldFilePath = path.join(uploadDir, path.basename(oldPictureResult.rows[0].profile_picture_url));
+          if (fs.existsSync(oldFilePath)) {
+            fs.unlinkSync(oldFilePath);
+          }
+        }
+      } catch (cleanupError) {
+        console.error('Error cleaning up old profile picture:', cleanupError);
+        // Don't fail the upload for cleanup errors
+      }
+
+      // Update user's profile picture URL in database
+      const profilePictureUrl = `/uploads/${fileName}`;
+      await pool.query(
+        'UPDATE users SET profile_picture_url = $1 WHERE id = $2',
+        [profilePictureUrl, req.user.userId]
+      );
+
+      res.json({ 
+        fileName: profilePictureUrl,
+        message: 'Profile picture uploaded successfully' 
+      });
+    } catch (error) {
+      // Clean up temporary file if it still exists
+      if (tempFilePath && fs.existsSync(tempFilePath)) {
+        try {
+          fs.unlinkSync(tempFilePath);
+        } catch (cleanupError) {
+          console.error('Error cleaning up temp file:', cleanupError);
+        }
+      }
+
+      console.error('Upload profile picture error:', error);
+      
+      if (error.code === 'LIMIT_FILE_SIZE') {
+        return res.status(400).json({ error: 'File too large. Maximum size is 5MB.' });
+      }
+      
+      res.status(500).json({ error: 'Upload failed' });
     }
-
-    // Generate a unique filename
-    const fileExtension = path.extname(req.file.originalname);
-    const fileName = `profile-${req.user.userId}-${Date.now()}${fileExtension}`;
-    const filePath = path.join(uploadDir, fileName);
-
-    // Move the uploaded file to the correct location
-    fs.renameSync(req.file.path, filePath);
-
-    // Update user's profile picture URL in database
-    const profilePictureUrl = `/uploads/${fileName}`;
-    await pool.query(
-      'UPDATE users SET profile_picture_url = $1 WHERE id = $2',
-      [profilePictureUrl, req.user.userId]
-    );
-
-    res.json({ 
-      fileName: profilePictureUrl,
-      message: 'Profile picture uploaded successfully' 
-    });
-  } catch (error) {
-    console.error('Upload profile picture error:', error);
-    res.status(500).json({ error: 'Internal server error' });
   }
-});
+);
 
 // Static files for uploads
 app.use('/uploads', express.static(uploadDir));
 
-// Start server
+// Graceful shutdown
+
 app.listen(PORT, () => {
-  console.log(`🚀 ETOH Tracker API server running on port ${PORT}`);
-  console.log(`📊 Database: ${process.env.DB_NAME}`);
-  console.log(`📁 Upload directory: ${uploadDir}`);
+  console.log(`🚀 Server is running on port ${PORT}`);
 });

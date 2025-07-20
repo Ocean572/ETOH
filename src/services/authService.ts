@@ -25,9 +25,12 @@ export const authService = {
       throw new Error(data.error || 'Registration failed');
     }
     
-    // Store token in storage
-    if (data.token) {
-      await storage.setItemAsync('authToken', data.token);
+    // Store tokens in storage
+    if (data.accessToken) {
+      await storage.setItemAsync('authToken', data.accessToken);
+    }
+    if (data.refreshToken) {
+      await storage.setItemAsync('refreshToken', data.refreshToken);
     }
     
     return data;
@@ -52,9 +55,12 @@ export const authService = {
         throw new Error(data.error || 'Login failed');
       }
       
-      // Store token in storage
-      if (data.token) {
-        await storage.setItemAsync('authToken', data.token);
+      // Store tokens in storage
+      if (data.accessToken) {
+        await storage.setItemAsync('authToken', data.accessToken);
+      }
+      if (data.refreshToken) {
+        await storage.setItemAsync('refreshToken', data.refreshToken);
       }
       
       return data;
@@ -91,7 +97,44 @@ export const authService = {
     }
   },
 
+  async refreshToken() {
+    const refreshToken = await storage.getItemAsync('refreshToken');
+    if (!refreshToken) {
+      throw new Error('No refresh token available');
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ refreshToken }),
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        // Refresh token is invalid, clear all tokens
+        await this.signOut();
+        throw new Error(data.error || 'Token refresh failed');
+      }
+      
+      // Store new access token
+      if (data.accessToken) {
+        await storage.setItemAsync('authToken', data.accessToken);
+      }
+      
+      return data.accessToken;
+    } catch (error: any) {
+      console.error('Token refresh error:', error);
+      await this.signOut(); // Clear invalid tokens
+      throw error;
+    }
+  },
+
   async signOut() {
     await storage.removeItemAsync('authToken');
+    await storage.removeItemAsync('refreshToken');
   },
 };

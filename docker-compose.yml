@@ -41,6 +41,7 @@ services:
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
       - UPLOAD_DIR=/app/uploads
+      - FRONTEND_URL=${FRONTEND_URL}
     volumes:
       - uploads_data:/app/uploads
     depends_on:

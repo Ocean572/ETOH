@@ -37,7 +37,6 @@
       "startUrl": "/",
       "preferRelatedApplications": false,
       "bundler": "metro",
-      "template": "./web/index.html",
       "manifest": "./public/manifest.json",
       "serviceWorker": {
         "src": "./public/sw.js",

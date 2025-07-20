@@ -39,12 +39,28 @@ services:
       - DB_PASSWORD=${POSTGRES_PASSWORD}
       - JWT_SECRET=${JWT_SECRET}
       - UPLOAD_DIR=/app/uploads
+      - FRONTEND_URL=${FRONTEND_URL}
     volumes:
       - uploads_data:/app/uploads
       - ./backend:/app  # Live reload for development
     depends_on:
       db:
         condition: service_healthy
+    networks:
+      - app-network
+
+  # Expo React Native App (Development)
+  app:
+    build:
+      context: .
+      args:
+        API_URL: ${API_URL:-http://localhost:3001}
+    container_name: etoh-app-dev
+    restart: unless-stopped
+    ports:
+      - "19006:80"  # Map container port 80 to host port 19006
+    depends_on:
+      - api
     networks:
       - app-network
 
